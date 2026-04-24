@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TV.Everywhere by DTGODEV</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="loader-ring">
+      <div></div><div></div><div></div><div></div>
+    </div>
+    <p id="loading-text">Initializing Global Stream Grid...</p>
+    <p id="loading-sub">Fetching channels, streams & satellite data</p>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-icon">📡</div>
+      <div>
+        <h1>TV.Everywhere</h1>
+        <span class="byline">by DTGODEV</span>
+      </div>
+    </div>
+    <div class="search-box">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.35-4.35"></path>
+      </svg>
+      <input type="text" id="search" placeholder="Search countries or channels..." autocomplete="off" />
+      <div id="search-results" class="dropdown hidden"></div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main>
+    <div id="globe-container"></div>
+
+    <!-- Legend -->
+    <div id="legend">
+      <div class="legend-title">📶 Channel Density</div>
+      <div class="legend-gradient"></div>
+      <div class="legend-labels">
+        <span>None</span>
+        <span>500+</span>
+      </div>
+    </div>
+
+    <!-- Reset View -->
+    <button id="reset-view" title="Reset Globe View">⟲</button>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="hidden">
+      <div class="sidebar-header">
+        <div>
+          <h2 id="sidebar-title">Select a Country</h2>
+          <div id="channel-count" class="meta"></div>
+        </div>
+        <button id="close-sidebar" aria-label="Close">✕</button>
+      </div>
+      <div class="sidebar-filters">
+        <input type="text" id="filter-channels" placeholder="Filter channels..." />
+      </div>
+      <ul id="channels"></ul>
+    </aside>
+
+    <!-- Player Overlay -->
+    <div id="player-overlay" class="hidden">
+      <div class="player-backdrop"></div>
+      <div class="player-card">
+        <div class="player-header">
+          <div class="channel-info">
+            <img id="player-logo" src="" alt="" class="hidden" />
+            <div>
+              <h3 id="current-channel-name">Channel</h3>
+              <span id="player-meta" class="meta"></span>
+            </div>
+          </div>
+          <button id="close-player" aria-label="Close Player">✕</button>
+        </div>
+        <div class="player-body">
+          <div id="player-loader" class="player-loader hidden">
+            <div class="loader-ring small">
+              <div></div><div></div><div></div><div></div>
+            </div>
+            <p>Acquiring signal...</p>
+          </div>
+          <div id="stream-fallback" class="stream-fallback hidden">
+            <p>🔌 Primary stream failed. Attempting fallback...</p>
+          </div>
+          <div id="player-error" class="player-error hidden">
+            <p>⚠️ All streams unavailable for this channel.</p>
+            <button id="retry-stream">Retry</button>
+          </div>
+          <video id="video-player" controls playsinline poster=""></video>
+          <div class="stream-controls">
+            <span id="stream-indicator">Stream 1 / 1</span>
+            <button id="next-stream" class="hidden">Next Stream ⏵</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <p> No copyrighted content is hosted.
+      developed by DTGOdev
+    </p>
+    <p id="stats"></p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
