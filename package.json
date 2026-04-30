@@ -1,5 +1,5 @@
 {
-  "name": "tveverywhere",
+  "name": "Mylo-TV",
   "version": "1.0.0",
   "scripts": {
     "build": "cordova build android"
