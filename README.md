@@ -1,6 +1,6 @@
 # Mylo-TV
 > A lightweight global TV streaming grid & aggregator by **DTGODEV**
-
+> <img>TV.png</img>
 ## 📖 Overview
 **MYLO-TV** is a browser-based web application designed to fetch, organize, and play live TV channels from around the world. It provides a centralized stream grid with real-time country/channel filtering, adjustable interface density, and an intelligent stream recovery system to ensure smooth playback.
 
