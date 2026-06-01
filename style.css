@@ -47,8 +47,7 @@ html, body {
   transition: opacity 0.6s ease;
 }
 
-#loading-overlay.hidden {
-  opacity: 0;
+#loading-overlay.hidden {  opacity: 0;
   pointer-events: none;
 }
 
@@ -97,8 +96,7 @@ html, body {
 
 .loader-ring.small div {
   width: 30px;
-  height: 30px;
-  margin: 2px;
+  height: 30px;  margin: 2px;
   border-width: 3px;
 }
 
@@ -108,7 +106,7 @@ html, body {
 }
 
 /* ============================================
-   HEADER
+   HEADER & ENHANCED BRAND LOGO
    ============================================ */
 header {
   position: absolute;
@@ -120,8 +118,9 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(180deg, rgba(2,2,5,0.9) 0%, rgba(2,2,5,0) 100%);
+  background: linear-gradient(180deg, rgba(2,2,5,0.95) 0%, rgba(2,2,5,0.8) 60%, rgba(2,2,5,0) 100%);
   pointer-events: none;
+  border-bottom: 1px solid rgba(0, 240, 255, 0.05);
 }
 
 header > * {
@@ -131,26 +130,85 @@ header > * {
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 1rem;
+  background: rgba(12, 12, 28, 0.4);
+  backdrop-filter: blur(10px);
+  padding: 0.5rem 1rem 0.5rem 0.5rem;
+  border-radius: 50px;
+  border: 1px solid rgba(0, 240, 255, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  transition: var(--transition);
 }
 
-.logo-icon {
-  font-size: 1.8rem;
-  filter: drop-shadow(0 0 8px rgba(0,240,255,0.4));
+.brand:hover {
+  border-color: rgba(0, 240, 255, 0.3);
+  box-shadow: 0 4px 25px rgba(0, 240, 255, 0.1);
+}
+
+.logo-icon {  font-size: 1.6rem;
+  background: radial-gradient(circle, rgba(0,240,255,0.2) 0%, rgba(0,0,0,0) 70%);
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+  animation: pulse-signal 3s infinite ease-in-out;
+}
+
+@keyframes pulse-signal {
+  0% { box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); transform: scale(1); }
+  50% { box-shadow: 0 0 20px rgba(0, 240, 255, 0.4); transform: scale(1.05); }
+  100% { box-shadow: 0 0 10px rgba(0, 240, 255, 0.2); transform: scale(1); }
 }
 
 .brand h1 {
-  font-size: 1.3rem;
-  font-weight: 700;
-  letter-spacing: -0.3px;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: 1px;
   line-height: 1;
+  margin: 0;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, #ffffff 0%, #00f0ff 50%, #008cff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+  position: relative;
+}
+
+.brand h1::after {
+  content: 'Mylo-TV';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  opacity: 0;
+  transform: skewX(-20deg) translateX(-150%);
+  animation: shine 6s infinite linear;
+}
+
+@keyframes shine {
+  0%, 80% { transform: skewX(-20deg) translateX(-150%); opacity: 0; }  85% { opacity: 0.5; }
+  90% { transform: skewX(-20deg) translateX(150%); opacity: 0; }
+  100% { transform: skewX(-20deg) translateX(150%); opacity: 0; }
 }
 
 .byline {
-  font-size: 0.7rem;
-  color: var(--text-dim);
+  font-size: 0.65rem;
+  color: var(--accent-cyan);
   text-transform: uppercase;
-  letter-spacing: 1px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  opacity: 0.8;
+  display: block;
+  margin-top: 2px;
+  text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
 }
 
 /* ============================================
@@ -185,8 +243,7 @@ header > * {
 }
 
 .search-icon {
-  position: absolute;
-  left: 0.85rem;
+  position: absolute;  left: 0.85rem;
   top: 50%;
   transform: translateY(-50%);
   width: 16px;
@@ -235,7 +292,6 @@ header > * {
   cursor: pointer;
   transition: var(--transition);
 }
-
 .search-item:hover {
   background: rgba(0, 240, 255, 0.08);
 }
@@ -285,8 +341,7 @@ header > * {
 
 /* ============================================
    GLOBE
-   ============================================ */
-#globe-container {
+   ============================================ */#globe-container {
   width: 100vw;
   height: 100vh;
   cursor: grab;
@@ -296,7 +351,6 @@ header > * {
   cursor: grabbing;
 }
 
-/* Globe Tooltip */
 .scene-tooltip {
   background: rgba(12, 12, 28, 0.95) !important;
   border: 1px solid rgba(0, 240, 255, 0.35) !important;
@@ -336,8 +390,7 @@ header > * {
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 0.6rem;
+  letter-spacing: 1px;  margin-bottom: 0.6rem;
   color: var(--text-dim);
 }
 
@@ -386,8 +439,7 @@ header > * {
 
 /* ============================================
    SIDEBAR
-   ============================================ */
-#sidebar {
+   ============================================ */#sidebar {
   position: absolute;
   top: 80px;
   right: 20px;
@@ -436,8 +488,7 @@ header > * {
 
 #close-sidebar {
   width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  height: 32px;  border-radius: 8px;
   border: none;
   background: rgba(255,255,255,0.06);
   color: var(--text-dim);
@@ -486,8 +537,7 @@ header > * {
   align-items: center;
   gap: 0.85rem;
   padding: 0.7rem 0.75rem;
-  border-radius: 10px;
-  cursor: pointer;
+  border-radius: 10px;  cursor: pointer;
   transition: var(--transition);
   border: 1px solid transparent;
 }
@@ -536,8 +586,7 @@ header > * {
   font-weight: 600;
   font-size: 0.9rem;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: hidden;  text-overflow: ellipsis;
 }
 
 .channel-meta {
@@ -575,7 +624,6 @@ header > * {
   font-size: 0.9rem;
 }
 
-/* Scrollbar */
 #channels::-webkit-scrollbar {
   width: 6px;
 }
@@ -588,9 +636,8 @@ header > * {
   background: rgba(255,255,255,0.1);
   border-radius: 3px;
 }
-
 /* ============================================
-   PLAYER OVERLAY
+   PLAYER OVERLAY & GPU VIDEO
    ============================================ */
 #player-overlay {
   position: fixed;
@@ -637,7 +684,6 @@ header > * {
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border);
 }
-
 .player-header .channel-info {
   display: flex;
   align-items: center;
@@ -686,12 +732,17 @@ header > * {
   background: #000;
 }
 
-#video-player {
-  width: 100%;
+/* GPU ACCELERATION FOR VIDEO */
+#video-player {  width: 100%;
   height: auto;
   max-height: 60vh;
   display: block;
   aspect-ratio: 16/9;
+  /* Force Hardware Acceleration */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  will-change: transform;
 }
 
 .player-loader,
@@ -731,8 +782,7 @@ header > * {
   background: rgba(0, 240, 255, 0.1);
 }
 
-.hidden {
-  display: none !important;
+.hidden {  display: none !important;
 }
 
 .stream-controls {
@@ -781,8 +831,7 @@ footer {
   font-size: 0.75rem;
   color: var(--text-dim);
   background: linear-gradient(0deg, rgba(2,2,5,0.9) 0%, rgba(2,2,5,0) 100%);
-  pointer-events: none;
-}
+  pointer-events: none;}
 
 footer a {
   color: var(--accent-cyan);
@@ -831,8 +880,7 @@ footer a:hover {
 
   #reset-view {
     bottom: 3.5rem;
-    right: 1rem;
-    width: 38px;
+    right: 1rem;    width: 38px;
     height: 38px;
   }
 
