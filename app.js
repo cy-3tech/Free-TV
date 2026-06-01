@@ -1,7 +1,3 @@
-/* ============================================
-   TV.EVERYWHERE — GLOBAL STREAMING INTERFACE
-   ============================================ */
-
 // ---------- State ----------
 const state = {
   channelsById: new Map(),
@@ -13,8 +9,7 @@ const state = {
   currentChannel: null,
   currentStreamIndex: 0,
   hlsInstance: null,
-  globe: null,
-  isFiltering: false
+  globe: null
 };
 
 // ---------- DOM Helpers ----------
@@ -47,21 +42,20 @@ async function init() {
     $('loading-text').textContent = 'Connection failed.';
     $('loading-sub').textContent = 'Retrying in 3 seconds...';
     setTimeout(init, 3000);
-  }
-}
+  }}
 
 function processData(channels, streams, countries, logos, geoData) {
-  // Country metadata
+  // Process Countries
   countries.forEach(c => state.countryMeta.set(c.code, c));
 
-  // Logos (first per channel)
+  // Process Logos
   logos.forEach(l => {
     if (!state.logosByChannel.has(l.channel)) {
       state.logosByChannel.set(l.channel, l.url);
     }
   });
 
-  // Channels
+  // Process Channels
   channels.forEach(ch => {
     state.channelsById.set(ch.id, {
       ...ch,
@@ -70,14 +64,14 @@ function processData(channels, streams, countries, logos, geoData) {
     });
   });
 
-  // Attach streams
+  // Attach Streams to Channels
   streams.forEach(s => {
     if (s.channel && state.channelsById.has(s.channel)) {
       state.channelsById.get(s.channel).streams.push(s);
     }
   });
 
-  // Group by country (only channels with streams)
+  // Group Channels by Country
   state.channelsById.forEach(ch => {
     if (ch.streams.length === 0) return;
     const code = (ch.country || 'XX').toUpperCase();
@@ -87,21 +81,16 @@ function processData(channels, streams, countries, logos, geoData) {
     state.channelsByCountry.get(code).push(ch);
   });
 
-  // Enrich GeoJSON with channel counts
+  // Prepare GeoJSON Features with Counts
   state.geoFeatures = geoData.features.map(f => {
     const isoA2 = (f.properties.ISO_A2 || f.properties.ISO_A2_EH || '').toUpperCase();
     const count = state.channelsByCountry.has(isoA2) ? state.channelsByCountry.get(isoA2).length : 0;
     return {
       ...f,
-      properties: {
-        ...f.properties,
-        isoA2,
-        channelCount: count
-      }
+      properties: { ...f.properties, isoA2, channelCount: count }
     };
   });
 }
-
 function updateStats() {
   let totalChannels = 0;
   state.channelsByCountry.forEach(arr => totalChannels += arr.length);
@@ -151,8 +140,7 @@ function initGlobe() {
         showCountryChannels(code);
       }
     })
-    .onPolygonHover(hoverD => {
-      globe
+    .onPolygonHover(hoverD => {      globe
         .polygonAltitude(d => d === hoverD ? 0.05 : 0.006)
         .polygonCapColor(d => {
           if (d === hoverD) return 'rgba(255, 215, 0, 0.9)';
@@ -202,7 +190,6 @@ function showCountryChannels(code) {
   const channels = state.channelsByCountry.get(code) || [];
   const country = state.countryMeta.get(code);
   const name = country ? `${country.flag || '🏳️'} ${country.name}` : code;
-
   state.currentCountry = code;
   $('sidebar-title').textContent = name;
   $('channel-count').textContent = `${channels.length} channel${channels.length !== 1 ? 's' : ''}`;
@@ -251,8 +238,7 @@ function renderChannelList(channels) {
     });
     li.addEventListener('click', () => playChannel(ch));
 
-    ul.appendChild(li);
-  });
+    ul.appendChild(li);  });
 }
 
 // ---------- Player ----------
@@ -260,7 +246,7 @@ function playChannel(channel, streamIndex = 0) {
   state.currentChannel = channel;
   state.currentStreamIndex = streamIndex;
 
-  if (streamIndex >= channel.streams.length) {
+  if (!channel.streams || streamIndex >= channel.streams.length) {
     showPlayerError(true);
     return;
   }
@@ -268,11 +254,12 @@ function playChannel(channel, streamIndex = 0) {
   const stream = channel.streams[streamIndex];
 
   $('current-channel-name').textContent = channel.name;
-  $('player-meta').textContent = [
-    stream.quality || 'Unknown quality',
-    state.countryMeta.get(channel.country)?.name || channel.country || 'N/A',
-    stream.title
-  ].filter(Boolean).join(' • ');
+
+  let metaParts = [stream.quality || 'HD'];
+  metaParts.push(state.countryMeta.get(channel.country)?.name || channel.country || 'N/A');
+  if (stream.title) metaParts.push(stream.title);
+
+  $('player-meta').textContent = metaParts.filter(Boolean).join(' • ');
 
   const logo = $('player-logo');
   if (channel.logo) {
@@ -289,18 +276,17 @@ function playChannel(channel, streamIndex = 0) {
   $('next-stream').classList.toggle('hidden', channel.streams.length <= 1);
   $('stream-indicator').textContent = `Stream ${streamIndex + 1} / ${channel.streams.length}`;
 
-  // Cleanup previous
   if (state.hlsInstance) {
     state.hlsInstance.destroy();
     state.hlsInstance = null;
   }
+  
   const v = $('video-player');
   v.pause();
   v.removeAttribute('src');
   v.load();
 
   const url = stream.url;
-
   const onFatal = () => {
     if (!state.currentChannel) return;
     $('stream-fallback').classList.remove('hidden');
@@ -351,7 +337,6 @@ function closePlayer() {
   state.currentChannel = null;
   state.currentStreamIndex = 0;
 }
-
 function showPlayerError(show, msg) {
   $('player-loader').classList.add('hidden');
   $('stream-fallback').classList.add('hidden');
@@ -386,13 +371,11 @@ function performSearch(query) {
     if (ch.streams.length === 0) return;
     const nameMatch = ch.name.toLowerCase().includes(query);
     const altMatch = ch.alt_names?.some(n => n.toLowerCase().includes(query));
-    if (nameMatch || altMatch) {
-      channels.push({ type: 'channel', channel: ch });
-    }
+    if (nameMatch || altMatch) channels.push({ type: 'channel', channel: ch });
   });
 
-  const cSlice = countries.slice(0, 5);
-  const chSlice = channels.slice(0, 10);
+  const cSlice = countries.slice(0, 4);
+  const chSlice = channels.slice(0, 6);
 
   if (!cSlice.length && !chSlice.length) {
     $('search-results').innerHTML = '<div class="search-empty">No results found</div>';
@@ -402,8 +385,7 @@ function performSearch(query) {
 
   let html = '';
   if (cSlice.length) {
-    html += '<div class="search-section">Countries</div>';
-    cSlice.forEach(c => {
+    html += '<div class="search-section">Countries</div>';    cSlice.forEach(c => {
       html += `
         <div class="search-item" data-type="country" data-code="${c.code}">
           <span class="search-flag">${c.flag || '🏳️'}</span>
@@ -411,6 +393,7 @@ function performSearch(query) {
         </div>`;
     });
   }
+  
   if (chSlice.length) {
     html += '<div class="search-section">Channels</div>';
     chSlice.forEach(c => {
@@ -451,8 +434,7 @@ function performSearch(query) {
   });
 }
 
-// Sidebar filter
-$('filter-channels').addEventListener('input', e => {
+// Sidebar filter$('filter-channels').addEventListener('input', e => {
   const q = e.target.value.toLowerCase();
   document.querySelectorAll('.channel-item').forEach(li => {
     li.style.display = li.dataset.name.includes(q) ? '' : 'none';
@@ -501,8 +483,7 @@ document.addEventListener('keydown', e => {
 function escapeHtml(text) {
   const d = document.createElement('div');
   d.textContent = text;
-  return d.innerHTML;
-}
+  return d.innerHTML;}
 
 function showLoading(text) {
   $('loading-text').textContent = text;
