@@ -43,24 +43,14 @@ jobs:
       - name: Generate app icons (Placeholder)
         run: |
           mkdir -p res/android
-          if [ ! -f "res/android/icon.png" ]; then
-            python3 -c "
-from PIL import Image, ImageDraw, ImageFont
-img = Image.new('RGB', (512, 512), color='#4A90E2')
-draw = ImageDraw.Draw(img)try:
-    font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 60)
-except:
-    font = ImageFont.load_default()
-text = 'Mylo TV'
-bbox = draw.textbbox((0, 0), text, font=font)
-text_width = bbox[2] - bbox[0]
-text_height = bbox[3] - bbox[1]
-x = (512 - text_width) / 2
-y = (512 - text_height) / 2
-draw.text((x, y), text, fill='white', font=font)
-img.save('res/android/icon.png')
-print('Icon created successfully')
-" || echo "Warning: Could not create icon via Python"
+          # Try using ImageMagick's convert command (pre-installed on Ubuntu runners)
+          if command -v convert &> /dev/null; then
+            echo "Generating icon with ImageMagick..."
+            convert -size 512x512 xc:'#4A90E2' -fill white -font Helvetica -pointsize 60 -gravity center -annotate +0+0 'Mylo TV' res/android/icon.png
+          else            echo "ImageMagick not found, creating a simple placeholder..."
+            # Fallback: Create a simple PNG using base64 encoded minimal image or just skip if not critical
+            # For now, we'll just create an empty file to prevent build failure if config.xml requires it
+            touch res/android/icon.png
           fi
 
       - name: Build Debug APK
@@ -96,7 +86,8 @@ print('Icon created successfully')
       - name: Align and Sign Release APK
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          cd platforms/android/app/build/outputs/apk/release          UNSIGNED_APK=$(ls *-unsigned.apk 2>/dev/null || ls *.apk | head -1)
+          cd platforms/android/app/build/outputs/apk/release
+          UNSIGNED_APK=$(ls *-unsigned.apk 2>/dev/null || ls *.apk | head -1)
           if [ -n "$UNSIGNED_APK" ]; then
             jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
               -keystore $KEYSTORE_FILE \
@@ -105,8 +96,7 @@ print('Icon created successfully')
               $UNSIGNED_APK $KEY_ALIAS
             
             zipalign -v 4 $UNSIGNED_APK MyloTV-release.apk
-          else
-            # If no unsigned found, try to align the existing one
+          else            # If no unsigned found, try to align the existing one
             ls -la
             zipalign -v 4 *.apk MyloTV-release.apk || cp *.apk MyloTV-release.apk
           fi
