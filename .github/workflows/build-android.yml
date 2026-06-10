@@ -1,0 +1,167 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Cordova
+        run: |
+          npm install -g cordova
+          npm install -g cordova-res
+
+      - name: Install project dependencies
+        run: npm install
+
+      - name: Add Android platform
+        run: cordova platform add android@latest
+
+      - name: Generate app icons and splash screens
+        run: |
+          mkdir -p res/android
+          # Create placeholder icon if doesn't exist
+          if [ ! -f "res/android/icon.png" ]; then
+            echo "Creating placeholder icon..."
+            convert -size 512x512 xc:#4A90E2 -fill white -pointsize 60 -gravity center -annotate 0 "Mylo TV" res/android/icon.png 2>/dev/null || \
+            python3 -c "          from PIL import Image, ImageDraw, ImageFont
+          img = Image.new('RGB', (512, 512), color='#4A90E2')
+          draw = ImageDraw.Draw(img)
+          try:
+              font = ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', 60)
+          except:
+              font = ImageFont.load_default()
+          text = 'Mylo TV'
+          bbox = draw.textbbox((0, 0), text, font=font)
+          text_width = bbox[2] - bbox[0]
+          text_height = bbox[3] - bbox[1]
+          x = (512 - text_width) / 2
+          y = (512 - text_height) / 2
+          draw.text((x, y), text, fill='white', font=font)
+          img.save('res/android/icon.png')
+          print('Icon created successfully')
+          " 2>/dev/null || echo "Warning: Could not create icon, using default"
+          fi
+
+      - name: Prepare Cordova resources
+        run: |
+          # Copy config.xml to www if needed
+          if [ -f "config.xml" ]; then
+            echo "Config found"
+          fi
+
+      - name: Build Debug APK
+        if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+        run: cordova build android --debug
+
+      - name: Upload Debug APK Artifact
+        if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mylo-tv-debug-apk
+          path: platforms/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 30
+
+      - name: Setup Keystore for Release Build
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release-keystore.jks
+          echo "KEYSTORE_FILE=release-keystore.jks" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Build Release APK
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |          cordova build android --release -- \
+            -Pandroid.injected.signing.store.file=$KEYSTORE_FILE \
+            -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD
+
+      - name: Align and Sign Release APK
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          cd platforms/android/app/build/outputs/apk/release
+          # Find the unsigned APK
+          UNSIGNED_APK=$(ls *-unsigned.apk 2>/dev/null || ls *.apk | head -1)
+          if [ -n "$UNSIGNED_APK" ]; then
+            # Use apksigner if available, otherwise jarsigner
+            if command -v apksigner &> /dev/null; then
+              apksigner sign --ks $KEYSTORE_FILE --ks-key-alias $KEY_ALIAS \
+                --ks-pass pass:$KEYSTORE_PASSWORD \
+                --key-pass pass:$KEY_PASSWORD \
+                --out MyloTV-release.apk $UNSIGNED_APK
+            else
+              jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+                -keystore $KEYSTORE_FILE \
+                -storepass $KEYSTORE_PASSWORD \
+                -keypass $KEY_PASSWORD \
+                $UNSIGNED_APK $KEY_ALIAS
+              cp $UNSIGNED_APK MyloTV-release.apk
+            fi
+            # Align the APK
+            zipalign -v 4 MyloTV-release.apk MyloTV-aligned.apk
+            mv MyloTV-aligned.apk MyloTV-release.apk
+          fi
+
+      - name: Upload Release APK Artifact
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: mylo-tv-release-apk
+          path: platforms/android/app/build/outputs/apk/release/MyloTV-release.apk
+          retention-days: 90
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: platforms/android/app/build/outputs/apk/release/MyloTV-release.apk
+          name: "Mylo TV ${{ github.ref_name }}"
+          body: |
+            ## Mylo TV Android App
+            
+            **Version:** ${{ github.ref_name }}            **Build Date:** $(date)
+            
+            ### Features:
+            - 🌍 Global TV channel streaming
+            - 🔍 Smart filtering by country
+            - 📊 Adjustable channel density
+            - 🔄 Automatic fallback sources
+            - 📡 Real-time status monitoring
+            
+            ### Installation:
+            1. Download the APK file below
+            2. Enable "Install from Unknown Sources" in your Android settings
+            3. Install and enjoy!
+            
+            ---
+            *Built automatically with GitHub Actions*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
