@@ -30,56 +30,43 @@ jobs:
           java-version: '17'
 
       - name: Install Cordova
-        run: |
-          npm install -g cordova
+        run: npm install -g cordova
 
       - name: Initialize Cordova Project
         run: |
-          # Create a temporary 'www' folder if it doesn't exist
+          # Ensure config.xml exists in root (Cordova requirement)
+          if [ ! -f "config.xml" ]; then
+            python3 -c "
+import os
+config_content = '''<?xml version='1.0' encoding='utf-8'?>
+<widget id=\"com.mylo.tv\" version=\"1.0.0\" xmlns=\"http://www.w3.org/ns/widgets\" xmlns:cdv=\"http://cordova.apache.org/ns/1.0\">
+    <name>Mylo TV</name>
+    <description>Free TV Streaming App</description>
+    <author email=\"dev@cy-3tech.github.io\" href=\"https://cy-3tech.github.io\">Cy-3Tech</author>
+    <content src=\"index.html\" />
+    <access origin=\"*\" />
+    <allow-intent href=\"http://*/*\" />
+    <allow-intent href=\"https://*/*\" />
+    <preference name=\"android-targetSdkVersion\" value=\"33\" />    <preference name=\"android-minSdkVersion\" value=\"24\" />
+</widget>'''
+with open('config.xml', 'w') as f:
+    f.write(config_content)
+print('config.xml created successfully')
+"
+          fi
+          
+          # Ensure www folder exists for web assets
           mkdir -p www
           
-          # Move web files into www if they are in root (standard for GitHub Pages repos)
-          # Adjust this list based on your actual file structure
-          for f in index.html app.js style.css config.xml package.json; do
-            if [ -f "$f" ]; then
+          # Move web files to www if they aren't already there
+          for f in index.html app.js style.css package.json; do
+            if [ -f "$f" ] && [ ! -f "www/$f" ]; then
               mv "$f" www/
             fi
           done
-          
-          # Create a basic config.xml if one doesn't exist in www
-          if [ ! -f "www/config.xml" ]; then            cat > www/config.xml << 'EOL'
-<?xml version='1.0' encoding='utf-8'?>
-<widget id="com.mylo.tv" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
-    <name>Mylo TV</name>
-    <description>Free TV Streaming App</description>
-    <author email="dev@cy-3tech.github.io" href="https://cy-3tech.github.io">Cy-3Tech</author>
-    <content src="index.html" />
-    <access origin="*" />
-    <allow-intent href="http://*/*" />
-    <allow-intent href="https://*/*" />
-    <preference name="android-targetSdkVersion" value="33" />
-    <preference name="android-minSdkVersion" value="24" />
-</widget>
-EOL
-          fi
 
       - name: Add Android Platform
-        run: |
-          # Run from the directory containing config.xml (usually www or root after move)
-          # If we moved files to www, we run cordova commands from www? 
-          # Actually, standard cordova expects config.xml in ROOT.
-          # Let's move them back to root to be safe, or just run from root if config.xml is there.
-          
-          # Revert move: Cordova expects config.xml in project root
-          if [ -d "www" ]; then
-             # If we created www, we should actually run 'cordova create' or just ensure config.xml is in root
-             # Simplest fix: Ensure config.xml is in ROOT
-             if [ -f "www/config.xml" ] && [ ! -f "config.xml" ]; then
-                mv www/config.xml .
-             fi
-          fi
-          
-          cordova platform add android@latest
+        run: cordova platform add android@latest
 
       - name: Generate app icons (Placeholder)
         run: |
@@ -96,7 +83,8 @@ EOL
 
       - name: Upload Debug APK Artifact
         if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4        with:
+        uses: actions/upload-artifact@v4
+        with:
           name: mylo-tv-debug-apk
           path: platforms/android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
@@ -109,7 +97,6 @@ EOL
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
-
       - name: Build Release APK
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -145,7 +132,8 @@ EOL
           path: platforms/android/app/build/outputs/apk/release/MyloTV-release.apk
           retention-days: 90
 
-      - name: Create GitHub Release        if: startsWith(github.ref, 'refs/tags/')
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: platforms/android/app/build/outputs/apk/release/MyloTV-release.apk
@@ -156,9 +144,8 @@ EOL
             **Version:** ${{ github.ref_name }}
             
             ### Features:
-            - 🌍 Global TV channel streaming
-            - 🔍 Smart filtering by country
-            -  Adjustable channel density
+            -  Global TV channel streaming
+            - 🔍 Smart filtering by country            - 📊 Adjustable channel density
             
             ### Installation:
             1. Download the APK file below
