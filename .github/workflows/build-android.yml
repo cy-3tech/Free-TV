@@ -32,24 +32,61 @@ jobs:
       - name: Install Cordova
         run: |
           npm install -g cordova
-          npm install -g cordova-res
 
-      - name: Install project dependencies
-        run: npm install
+      - name: Initialize Cordova Project
+        run: |
+          # Create a temporary 'www' folder if it doesn't exist
+          mkdir -p www
+          
+          # Move web files into www if they are in root (standard for GitHub Pages repos)
+          # Adjust this list based on your actual file structure
+          for f in index.html app.js style.css config.xml package.json; do
+            if [ -f "$f" ]; then
+              mv "$f" www/
+            fi
+          done
+          
+          # Create a basic config.xml if one doesn't exist in www
+          if [ ! -f "www/config.xml" ]; then            cat > www/config.xml << 'EOL'
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.mylo.tv" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Mylo TV</name>
+    <description>Free TV Streaming App</description>
+    <author email="dev@cy-3tech.github.io" href="https://cy-3tech.github.io">Cy-3Tech</author>
+    <content src="index.html" />
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <preference name="android-targetSdkVersion" value="33" />
+    <preference name="android-minSdkVersion" value="24" />
+</widget>
+EOL
+          fi
 
-      - name: Add Android platform
-        run: cordova platform add android@latest
+      - name: Add Android Platform
+        run: |
+          # Run from the directory containing config.xml (usually www or root after move)
+          # If we moved files to www, we run cordova commands from www? 
+          # Actually, standard cordova expects config.xml in ROOT.
+          # Let's move them back to root to be safe, or just run from root if config.xml is there.
+          
+          # Revert move: Cordova expects config.xml in project root
+          if [ -d "www" ]; then
+             # If we created www, we should actually run 'cordova create' or just ensure config.xml is in root
+             # Simplest fix: Ensure config.xml is in ROOT
+             if [ -f "www/config.xml" ] && [ ! -f "config.xml" ]; then
+                mv www/config.xml .
+             fi
+          fi
+          
+          cordova platform add android@latest
 
       - name: Generate app icons (Placeholder)
         run: |
           mkdir -p res/android
-          # Try using ImageMagick's convert command (pre-installed on Ubuntu runners)
           if command -v convert &> /dev/null; then
-            echo "Generating icon with ImageMagick..."
             convert -size 512x512 xc:'#4A90E2' -fill white -font Helvetica -pointsize 60 -gravity center -annotate +0+0 'Mylo TV' res/android/icon.png
-          else            echo "ImageMagick not found, creating a simple placeholder..."
-            # Fallback: Create a simple PNG using base64 encoded minimal image or just skip if not critical
-            # For now, we'll just create an empty file to prevent build failure if config.xml requires it
+          else
             touch res/android/icon.png
           fi
 
@@ -59,8 +96,7 @@ jobs:
 
       - name: Upload Debug APK Artifact
         if: github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
-        with:
+        uses: actions/upload-artifact@v4        with:
           name: mylo-tv-debug-apk
           path: platforms/android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
@@ -96,7 +132,7 @@ jobs:
               $UNSIGNED_APK $KEY_ALIAS
             
             zipalign -v 4 $UNSIGNED_APK MyloTV-release.apk
-          else            # If no unsigned found, try to align the existing one
+          else
             ls -la
             zipalign -v 4 *.apk MyloTV-release.apk || cp *.apk MyloTV-release.apk
           fi
@@ -109,8 +145,7 @@ jobs:
           path: platforms/android/app/build/outputs/apk/release/MyloTV-release.apk
           retention-days: 90
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Create GitHub Release        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
           files: platforms/android/app/build/outputs/apk/release/MyloTV-release.apk
@@ -123,8 +158,7 @@ jobs:
             ### Features:
             - 🌍 Global TV channel streaming
             - 🔍 Smart filtering by country
-            - 📊 Adjustable channel density
-            - 🔄 Automatic fallback sources
+            -  Adjustable channel density
             
             ### Installation:
             1. Download the APK file below
