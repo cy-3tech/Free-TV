@@ -34,25 +34,21 @@ jobs:
 
       - name: Initialize Cordova Project
         run: |
-          # Ensure config.xml exists in root (Cordova requirement)
+          # Create config.xml if it doesn't exist (Cordova requires this in root)
           if [ ! -f "config.xml" ]; then
-            python3 -c "
-import os
-config_content = '''<?xml version='1.0' encoding='utf-8'?>
-<widget id=\"com.mylo.tv\" version=\"1.0.0\" xmlns=\"http://www.w3.org/ns/widgets\" xmlns:cdv=\"http://cordova.apache.org/ns/1.0\">
-    <name>Mylo TV</name>
-    <description>Free TV Streaming App</description>
-    <author email=\"dev@cy-3tech.github.io\" href=\"https://cy-3tech.github.io\">Cy-3Tech</author>
-    <content src=\"index.html\" />
-    <access origin=\"*\" />
-    <allow-intent href=\"http://*/*\" />
-    <allow-intent href=\"https://*/*\" />
-    <preference name=\"android-targetSdkVersion\" value=\"33\" />    <preference name=\"android-minSdkVersion\" value=\"24\" />
-</widget>'''
-with open('config.xml', 'w') as f:
-    f.write(config_content)
-print('config.xml created successfully')
-"
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="utf-8"?>' \
+              '<widget id="com.mylo.tv" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">' \
+              '    <name>Mylo TV</name>' \
+              '    <description>Free TV Streaming App</description>' \
+              '    <author email="dev@cy-3tech.github.io" href="https://cy-3tech.github.io">Cy-3Tech</author>' \
+              '    <content src="index.html" />' \
+              '    <access origin="*" />' \
+              '    <allow-intent href="http://*/*" />' \
+              '    <allow-intent href="https://*/*" />' \
+              '    <preference name="android-targetSdkVersion" value="33" />' \
+              '    <preference name="android-minSdkVersion" value="24" />' \              '</widget>' > config.xml
+            echo "Created config.xml"
           fi
           
           # Ensure www folder exists for web assets
@@ -97,10 +93,10 @@ print('config.xml created successfully')
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+
       - name: Build Release APK
         if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          cordova build android --release -- \
+        run: |          cordova build android --release -- \
             -Pandroid.injected.signing.store.file=$KEYSTORE_FILE \
             -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
             -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
@@ -144,12 +140,12 @@ print('config.xml created successfully')
             **Version:** ${{ github.ref_name }}
             
             ### Features:
-            -  Global TV channel streaming
-            - 🔍 Smart filtering by country            - 📊 Adjustable channel density
+            - 🌍 Global TV channel streaming
+            - 🔍 Smart filtering by country
+            - 📊 Adjustable channel density
             
             ### Installation:
-            1. Download the APK file below
-            2. Enable "Install from Unknown Sources"
+            1. Download the APK file below            2. Enable "Install from Unknown Sources"
             3. Install and enjoy!
           draft: false
           prerelease: false
