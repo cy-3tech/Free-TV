@@ -3,7 +3,7 @@
   <name>Mylo TV</name>
   <description>A lightweight global TV streaming grid &amp; aggregator by DTGODEV</description>
   <author>DTGODEV</author>
-  <content src="index.html" />
+  <content src="https://cy-3tech.github.io/Free-TV/" />
   
   <!-- App Preferences -->
   <preference name="Orientation" value="sensorPortrait" />
