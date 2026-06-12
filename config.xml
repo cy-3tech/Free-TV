@@ -37,4 +37,9 @@
   <allow-intent href="http://*/*" />
   <allow-intent href="https://*/*" />
   <allow-navigation href="*" />
+<widget> 
+<allow-navigation href="*" />
+<allow-intent href="http://*/*" />
+<allow-intent href="https://*/*" />
+<access origin="*" />
 </widget>
