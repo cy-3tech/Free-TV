@@ -30,7 +30,7 @@
         <div class="loading-bar-fill" id="loading-bar"></div>
       </div>
       <p id="loading-text">Initializing Global Stream Grid...</p>
-      <p id="loading-sub">Fetching channels, streams &amp; satellite data</p>
+      <p id="loading-sub">Fetching channels, streams & satellite data</p>
     </div>
   </div>
 
@@ -48,24 +48,26 @@
         <span class="byline">by DTGOdev</span>
       </div>
     </div>
-
     <div class="search-box">
       <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="11" cy="11" r="8"></circle>
         <path d="m21 21-4.35-4.35"></path>
       </svg>
       <input type="text" id="search" placeholder="Search countries or channels..." autocomplete="off" />
+      <button id="voice-search-btn" class="voice-search-btn" title="Voice Search">🎤</button>
       <div id="search-results" class="dropdown hidden"></div>
     </div>
 
-    <div class="header-stats" id="header-stats"></div>
+    <div class="header-actions">
+      <div class="header-stats" id="header-stats"></div>
+      <button id="favorites-toggle-btn" class="action-btn" title="My Favorites">⭐</button>
+      <button id="donate-btn" class="action-btn donate-btn" title="Support Mylo-TV">💎</button>
+    </div>
   </header>
 
   <!-- Main -->
   <main>
     <div id="globe-container"></div>
-
-    <!-- Pulse rings on globe click feedback -->
     <div id="click-pulse" class="click-pulse hidden"></div>
 
     <!-- Legend -->
@@ -78,7 +80,6 @@
       </div>
     </div>
 
-    <!-- Reset View -->
     <button id="reset-view" title="Reset Globe View">⟲</button>
 
     <!-- Sidebar -->
@@ -95,6 +96,17 @@
       </div>
       <ul id="channels"></ul>
     </aside>
+    <!-- Favorites Sidebar -->
+    <aside id="favorites-sidebar" class="hidden">
+      <div class="sidebar-header">
+        <div>
+          <h2>⭐ My Favorites</h2>
+          <div class="meta">Saved Channels</div>
+        </div>
+        <button id="close-favorites" aria-label="Close">✕</button>
+      </div>
+      <ul id="favorites-list"></ul>
+    </aside>
 
     <!-- Player Overlay -->
     <div id="player-overlay" class="hidden">
@@ -110,6 +122,8 @@
           </div>
           <div class="player-header-right">
             <span id="live-badge"><span class="live-dot"></span>LIVE</span>
+            <!-- Favorite Button in Player -->
+            <button id="player-fav-btn" class="action-btn" title="Add to Favorites">☆</button>
             <button id="close-player" aria-label="Close Player">✕</button>
           </div>
         </div>
@@ -131,8 +145,7 @@
             id="video-player"
             controls
             playsinline
-            preload="auto"
-            disablepictureinpicture
+            preload="auto"            disablepictureinpicture
           ></video>
           <div class="stream-controls">
             <span id="stream-indicator">Stream 1 / 1</span>
@@ -143,11 +156,50 @@
     </div>
   </main>
 
+  <!-- Donation Modal -->
+  <div id="donation-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Support Mylo-TV 💎</h3>
+        <button id="close-donation" class="close-modal-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="donation-text">Help us keep the global stream grid free and open!</p>
+        
+        <div class="crypto-box">
+          <label>Solana (SOL)</label>
+          <div class="address-row">
+            <code id="sol-address">2ZkJA8NwDeJLD8qGwaSWhJxUUEuRwT9VkhirdV9cPSGy</code>
+            <button class="copy-btn" onclick="copyAddress('sol-address')">📋</button>
+          </div>
+        </div>
+
+        <div class="crypto-box">
+          <label>Bitcoin (BTC)</label>
+          <div class="address-row">
+            <code id="btc-address">bc1qv4yq6tv99vggenfn35gahfje4rnyumav0mkzvq</code>
+            <button class="copy-btn" onclick="copyAddress('btc-address')">📋</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
+
   <!-- Footer -->
   <footer>
-    <p>No copyrighted content is hosted or streamed by this platform.</p>
-    <p id="stats"></p>
-    <p class="footer-credit">developed by <span class="footer-dev">DTGOdev</span></p>
+    <div class="footer-left">
+      <p>No copyrighted content is hosted or streamed by this platform.</p>
+    </div>
+    <div class="footer-center">
+      <p id="stats"></p>      <!-- NEW: Visible User Counter -->
+      <p id="view-counter" class="view-counter">Loading stats...</p>
+    </div>
+    <div class="footer-right">
+      <p class="footer-credit">developed by <span class="footer-dev">DTGOdev</span></p>
+    </div>
   </footer>
 
   <script src="app.js"></script>
