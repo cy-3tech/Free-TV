@@ -16,7 +16,36 @@ const state = {
 
 const $ = id => document.getElementById(id);
 
+// ============================================
+// A NOTE ON CHANNEL SOURCING
+// ============================================
+// This app sources ALL channel + stream metadata from the community-maintained,
+// continuously-updated iptv-org public dataset (channels.json / streams.json /
+// logos.json). This already covers every country's free-to-air / publicly
+// streamable channels, so there is no need to hand-maintain per-country lists.
+//
+// South Africa's free-to-air channels (SABC 1/2/3, SABC News, SABC Sport,
+// e.tv, eExtra, eMovies, OpenView HD channels such as 1Magic-adjacent FTA
+// carriers, Mindset, Cbeebies-style kids feeds, etc.) come through the same
+// pipeline below and are tagged where possible — see tagOpenViewChannels().
+//
+// DStv is intentionally NOT included. DStv is MultiChoice's subscription
+// satellite service, delivered with proprietary DRM/encryption. There is no
+// legitimate free public stream endpoint for DStv channels, so adding "DStv"
+// entries here would necessarily mean either fake/non-functional URLs or
+// unauthorized/pirated feeds. Neither is something this app will ship.
+//
+// Every channel from the dataset is shown immediately — there is no
+// pre-flight network check before a channel appears. If a stream turns out
+// to be dead when someone actually presses play, playWithAntiBlock() (below)
+// automatically retries the channel's other candidate URLs/fallbacks, so bad
+// links get handled at play time instead of at load time.
 
+// Tag OpenView HD's known free-to-air channel names within South Africa so
+// they're easy to find/filter, without inventing stream data for them — the
+// underlying URLs still come from the same public dataset as everything else.
+const OPENVIEW_NAME_PATTERNS = [
+  /openview/i, /1magic/i, /moja\s?love/i, /a24/i, /rezolusie/i, /pop\s?tv/i, /soweto\s?tv/i, /dumelang/i
 ];
 function tagOpenViewChannels() {
   const zaIds = state.channelsByCountry.get('ZA') || [];
