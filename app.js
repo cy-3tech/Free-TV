@@ -20,7 +20,7 @@ const state = {
   dataLoaded: false,
   streamsLoaded: false,
   allStreams: null,
-  // Load favorites from LocalStorage initially for speed, sync with Supabase later if needed
+  // Load favorites from LocalStorage initially for speed
   favorites: JSON.parse(localStorage.getItem('myloFavorites')) || []
 };
 
@@ -29,7 +29,6 @@ const $ = id => document.getElementById(id);
 // ============================================
 // A NOTE ON CHANNEL SOURCING
 // ============================================
-// (Kept exactly as original)
 const OPENVIEW_NAME_PATTERNS = [
   /openview/i, /1magic/i, /moja\s?love/i, /a24/i, /rezolusie/i, /pop\s?tv/i, /soweto\s?tv/i, /dumelang/i
 ];
@@ -47,8 +46,8 @@ function tagOpenViewChannels() {
 
 // ============================================
 // STREAM ANTI-BLOCK / ROTATOR SYSTEM
-// ============================================function getRotatedStreams(channel) {
-  if (!channel.streams || channel.streams.length === 0) return [];
+// ============================================
+function getRotatedStreams(channel) {  if (!channel.streams || channel.streams.length === 0) return [];
   return channel.streams.map((stream, idx) => {
     const base = { ...stream, originalUrl: stream.url };
     if (idx === 0) {
@@ -96,8 +95,8 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
     if (metaEl) metaEl.textContent = `${stream.quality || 'Live'} • ${channel.country} • Anti-Block Active`;
     if (logo) {
       if (channel.logo) { logo.src = channel.logo; logo.classList.remove('hidden'); }
-      else { logo.classList.add('hidden'); }    }
-    if (overlay) overlay.classList.remove('hidden');
+      else { logo.classList.add('hidden'); }
+    }    if (overlay) overlay.classList.remove('hidden');
     if (loader) loader.classList.remove('hidden');
     if (fallback) fallback.classList.add('hidden');
     if (errorEl) errorEl.classList.add('hidden');
@@ -145,8 +144,8 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
         if (streamIndex + 1 < rotatedStreams.length) {
           playWithAntiBlock(channel, streamIndex + 1, attempt + 1);
         } else {
-          showPlayerError(true, 'All streams unavailable or blocked.');        }
-      }
+          showPlayerError(true, 'All streams unavailable or blocked.');
+        }      }
     };
 
     try {
@@ -207,35 +206,12 @@ async function initTracking() {
       localStorage.setItem('mylo_user_fp', currentUserFP);
     }
 
-    // 1. Increment View Count in Supabase
-    // We use a raw SQL update to increment atomically without fetching first
-    await supabase.rpc('increment_view_count'); 
-    // Note: If you haven't created the RPC function, we can do it via direct update logic below:
+    // 1. Increment View Count in Supabase using the secure function
+    // This is atomic and handles high traffic safely
+    await supabase.rpc('increment_view_count');
     
-    /* Fallback logic if RPC isn't set up yet: */
-    /*
-    const { data: stats } = await supabase.from('global_stats').select('total_views, unique_users').single();
-    if (stats) {
-       await supabase.from('global_stats').update({ 
-         total_views: stats.total_views + 1,
-         last_updated: new Date()
-       }).eq('id', stats.id);
-       
-       // Check if user is new (simple check against local storage for this session)
-       const isNewUser = !sessionStorage.getItem('session_tracked');
-       if(isNewUser) {
-          await supabase.from('global_stats').update({ 
-             unique_users: stats.unique_users + 1 
-          }).eq('id', stats.id);
-          sessionStorage.setItem('session_tracked', 'true');
-       }
-       
-       updateVisibleCounter({ totalViews: stats.total_views + 1, uniqueUsers: stats.unique_users + (isNewUser?1:0) });
-    }
-    */
-   
-   // For now, we will fetch the latest stats to display
-   fetchAndDisplayStats();
+    // 2. Fetch latest stats to display
+    fetchAndDisplayStats();
 
   } catch (e) { 
     console.warn('Tracking init failed, falling back to local:', e); 
@@ -243,7 +219,8 @@ async function initTracking() {
     const localStats = JSON.parse(localStorage.getItem('mylo_tv_package_json')) || { stats: { totalViews: 0, uniqueUsers: 0 } };
     localStats.stats.totalViews++;
     localStorage.setItem('mylo_tv_package_json', JSON.stringify(localStats));
-    updateVisibleCounter(localStats.stats);  }
+    updateVisibleCounter(localStats.stats);
+  }
 }
 
 async function fetchAndDisplayStats() {
@@ -260,10 +237,12 @@ async function fetchAndDisplayStats() {
 function updateVisibleCounter(stats) {
   const counterEl = $('view-counter');
   if (counterEl && stats) {
-    counterEl.textContent = `👁️ ${stats.total_views.toLocaleString()} Views • 👤 ${stats.unique_users.toLocaleString()} Users`;
+    // Handle both DB keys (snake_case) and local keys (camelCase)
+    const views = stats.total_views || stats.totalViews || 0;
+    const users = stats.unique_users || stats.uniqueUsers || 0;
+    counterEl.textContent = `👁️ ${views.toLocaleString()} Views • 👤 ${users.toLocaleString()} Users`;
   }
 }
-
 // ============================================
 // BACKGROUND PARTICLE CANVAS
 // ============================================
@@ -293,6 +272,7 @@ function initParticles() {
   }
   draw();
 }
+
 // ============================================
 // CACHE HELPER
 // ============================================
@@ -312,8 +292,7 @@ function processData(channels, countries, geoData) {
   channels.forEach(ch => {
     if (!ch.country || !ch.id) return;
     state.channelsById.set(ch.id, { id: ch.id, name: ch.name, country: ch.country.toUpperCase(), categories: ch.categories, logo: null, streams: [] });
-    const code = ch.country.toUpperCase();
-    if (!state.channelsByCountry.has(code)) state.channelsByCountry.set(code, []);
+    const code = ch.country.toUpperCase();    if (!state.channelsByCountry.has(code)) state.channelsByCountry.set(code, []);
     state.channelsByCountry.get(code).push(ch.id);
   });
   buildGeoFeatures(geoData);
@@ -341,7 +320,8 @@ async function loadAllStreams() {
       }
     });
     state.streamsLoaded = true;
-    console.log(`Mapped ${mapped} public streams across all countries`);  } catch(e) { console.error('Stream load failed:', e); }
+    console.log(`Mapped ${mapped} public streams across all countries`);
+  } catch(e) { console.error('Stream load failed:', e); }
 }
 
 function filterChannelsWithNoStreams() {
@@ -361,8 +341,7 @@ function rebuildCountryCounts() {
     const isoA2 = f.properties.isoA2;
     const count = state.channelsByCountry.has(isoA2) ? state.channelsByCountry.get(isoA2).length : 0;
     return { ...f, properties: { ...f.properties, channelCount: count } };
-  });
-  if (state.globe) state.globe.polygonsData(state.geoFeatures);
+  });  if (state.globe) state.globe.polygonsData(state.geoFeatures);
 }
 
 async function prefetchLogos() {
@@ -390,7 +369,8 @@ function updateStats() {
 function initGlobe() {
   const container = $('globe-container');
   if (!container) return;
-  const getColor = count => {    if (count === 0) return 'rgba(12, 14, 30, 0.65)';
+  const getColor = count => {
+    if (count === 0) return 'rgba(12, 14, 30, 0.65)';
     const t = Math.min(Math.log(count + 1) / Math.log(400 + 1), 1);
     return `rgba(${Math.round(255*t)}, ${Math.round(240*(1-t))}, ${Math.round(255*(1-t)+100*t)}, 0.82)`;
   };
@@ -410,8 +390,7 @@ function initGlobe() {
         showCountryChannels(code);
       }
     })
-    .onPolygonHover(hoverD => {
-      globe.polygonAltitude(d => d === hoverD ? 0.045 : 0.007)
+    .onPolygonHover(hoverD => {      globe.polygonAltitude(d => d === hoverD ? 0.045 : 0.007)
         .polygonCapColor(d => d === hoverD ? 'rgba(255,215,0,0.92)' : getColor(d.properties.channelCount));
     })(container);
   globe.controls().autoRotate = true;
@@ -439,7 +418,8 @@ function showCountryChannels(code, refresh=false) {
   state.currentCountry = code;
   const country = state.countryMeta.get(code);
   const name = country ? `${country.flag||'🏳️'} ${country.name}` : code;
-  const titleEl = $('sidebar-title'); if (titleEl) titleEl.textContent = name;  const sidebar=$('sidebar'), favSidebar=$('favorites-sidebar'), playerOverlay=$('player-overlay');
+  const titleEl = $('sidebar-title'); if (titleEl) titleEl.textContent = name;
+  const sidebar=$('sidebar'), favSidebar=$('favorites-sidebar'), playerOverlay=$('player-overlay');
   if (sidebar) sidebar.classList.remove('hidden');
   if (favSidebar) favSidebar.classList.add('hidden');
   if (playerOverlay) playerOverlay.classList.add('hidden');
@@ -459,8 +439,7 @@ function renderChannelList(channels) {
   if (!channels.length) { ul.innerHTML='<li class="empty">📭 No channels with live streams</li>'; return; }
   channels.sort((a,b)=>a.name.localeCompare(b.name));
   channels.forEach(ch => {
-    const li=document.createElement('li'); li.className='channel-item'; li.dataset.name=ch.name.toLowerCase();
-    const logoHtml = ch.logo ? `<img src="${ch.logo}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="logo-placeholder">${ch.name.charAt(0).toUpperCase()}</div>`;
+    const li=document.createElement('li'); li.className='channel-item'; li.dataset.name=ch.name.toLowerCase();    const logoHtml = ch.logo ? `<img src="${ch.logo}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="logo-placeholder">${ch.name.charAt(0).toUpperCase()}</div>`;
     const cats = ch.categories ? ch.categories.slice(0,2).join(', ') : 'General';
     const sc = ch.streams ? ch.streams.length : 0;
     li.innerHTML=`<div class="channel-logo">${logoHtml}</div><div class="channel-info"><div class="channel-name">${escapeHtml(ch.name)}</div><div class="channel-meta">${escapeHtml(cats)}</div><span class="stream-count-badge">▶ ${sc} stream${sc!==1?'s':''}</span></div><button class="play-btn" aria-label="Play ${escapeHtml(ch.name)}">▶</button>`;
@@ -488,7 +467,8 @@ function showPlayerError(show, msg) {
 }
 
 // ============================================
-// SEARCH// ============================================
+// SEARCH
+// ============================================
 let searchDebounce;
 function initSearch() {
   const si=$('search'); if(!si) return;
@@ -508,8 +488,7 @@ function performSearch(query) {
     if(c.name.toLowerCase().includes(query)&&state.channelsByCountry.has(code))
       items.push({type:'country',code,name:c.name,flag:c.flag});
   });
-  let count=0;
-  state.channelsById.forEach(ch=>{
+  let count=0;  state.channelsById.forEach(ch=>{
     if(count>12)return;
     if(ch.name.toLowerCase().includes(query)){items.push({type:'channel',channel:ch});count++;}
   });
@@ -537,7 +516,8 @@ window.selectCountry = async code => {
 
 window.playChannelById = id => {
   const ch=state.channelsById.get(id); if(ch)playChannel(ch);
-  const sr=$('search-results');if(sr)sr.classList.add('hidden');  const si=$('search');if(si)si.value='';
+  const sr=$('search-results');if(sr)sr.classList.add('hidden');
+  const si=$('search');if(si)si.value='';
 };
 
 // ============================================
@@ -557,8 +537,7 @@ function initNewFeatures() {
   if(favToggle&&favSidebar){favToggle.addEventListener('click',()=>{favSidebar.classList.remove('hidden');const s=$('sidebar');if(s)s.classList.add('hidden');renderFavorites();});}
   if(closeFav&&favSidebar){closeFav.addEventListener('click',()=>favSidebar.classList.add('hidden'));}
 
-  const pfav=$('player-fav-btn');
-  if(pfav){pfav.addEventListener('click',()=>{if(state.currentChannel){toggleFavorite(state.currentChannel.id);updatePlayerFavButton();}});}
+  const pfav=$('player-fav-btn');  if(pfav){pfav.addEventListener('click',()=>{if(state.currentChannel){toggleFavorite(state.currentChannel.id);updatePlayerFavButton();}});}
 
   const donateBtn=$('donate-btn'), modal=$('donation-modal'), closeDon=$('close-donation');
   if(donateBtn&&modal){donateBtn.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();modal.classList.remove('hidden');requestAnimationFrame(()=>modal.classList.add('visible'));});}
@@ -586,7 +565,8 @@ function renderFavorites(){
     li.innerHTML=`<div class="fav-logo">${lh}</div><div class="fav-info"><div class="fav-name">${escapeHtml(ch.name)}</div><div class="fav-meta">${ch.country}</div></div><button class="remove-fav-btn" title="Remove">🗑️</button>`;
     li.querySelector('.remove-fav-btn').addEventListener('click',(e)=>{e.stopPropagation();toggleFavorite(ch.id);renderFavorites();});
     li.addEventListener('click',()=>playChannel(ch));list.appendChild(li);
-  });}
+  });
+}
 
 function toggleFavorite(channelId){
   const idx=state.favorites.findIndex(f=>f.id===channelId);
@@ -606,8 +586,7 @@ function toggleFavorite(channelId){
 function initGlobalEvents(){
   const cs=$('close-sidebar');if(cs)cs.addEventListener('click',()=>{const s=$('sidebar');if(s)s.classList.add('hidden');});
   const cp=$('close-player');if(cp)cp.addEventListener('click',closePlayer);
-  const ns=$('next-stream');if(ns)ns.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,state.currentStreamIndex+1);});
-  const rs=$('retry-stream');if(rs)rs.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,0);});
+  const ns=$('next-stream');if(ns)ns.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,state.currentStreamIndex+1);});  const rs=$('retry-stream');if(rs)rs.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,0);});
   const rv=$('reset-view');if(rv)rv.addEventListener('click',()=>{if(state.globe)state.globe.pointOfView({lat:20,lng:0,altitude:2.5},1500);});
   const fi=$('filter-channels');if(fi)fi.addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('.channel-item').forEach(li=>{li.style.display=li.dataset.name.includes(q)?'':'none';});});
   document.addEventListener('click',e=>{if(!e.target.closest('.search-box')){const sr=$('search-results');if(sr)sr.classList.add('hidden');}});
@@ -635,7 +614,8 @@ async function init() {
     initGlobalEvents();
 
     setLoadingProgress(15,'Loading channels...');
-    const [chRes,coRes,geoRes] = await Promise.all([      fetchWithCache('https://iptv-org.github.io/api/channels.json','channels_v2'),
+    const [chRes,coRes,geoRes] = await Promise.all([
+      fetchWithCache('https://iptv-org.github.io/api/channels.json','channels_v2'),
       fetchWithCache('https://iptv-org.github.io/api/countries.json','countries_v2'),
       fetch('https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson')
     ]);
@@ -655,8 +635,7 @@ async function init() {
     setTimeout(hideLoading, 400);
     prefetchLogos();
   } catch (err) {
-    console.error('Critical init error:', err);
-    const lt=$('loading-text');
+    console.error('Critical init error:', err);    const lt=$('loading-text');
     if(lt) lt.textContent='Error Loading — Retrying...';
     setTimeout(init, 5000);
   }
