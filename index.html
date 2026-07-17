@@ -7,10 +7,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@300;400;500;600;700&display=swap">
   <link rel="stylesheet" href="style.css" />
+  
+  <!-- Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Supabase Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 
@@ -44,8 +47,7 @@
         <div class="orb-ring r3"></div>
         <span class="orb-icon">📡</span>
       </div>
-      <div class="brand-text">
-        <h1 class="brand-name">Mylo<span class="brand-dash">-</span><span class="brand-tv">TV</span></h1>
+      <div class="brand-text">        <h1 class="brand-name">Mylo<span class="brand-dash">-</span><span class="brand-tv">TV</span></h1>
         <span class="byline">by DTGOdev</span>
       </div>
     </div>
@@ -94,8 +96,7 @@
       </div>
       <div class="sidebar-filters">
         <input type="text" id="filter-channels" placeholder="Filter channels..." />
-      </div>
-      <ul id="channels"></ul>
+      </div>      <ul id="channels"></ul>
     </aside>
     <!-- Favorites Sidebar -->
     <aside id="favorites-sidebar" class="hidden">
@@ -144,9 +145,9 @@
           </div>
           <video
             id="video-player"
-            controls
-            playsinline
-            preload="auto"            disablepictureinpicture
+            controls            playsinline
+            preload="auto"
+            disablepictureinpicture
           ></video>
           <div class="stream-controls">
             <span id="stream-indicator">Stream 1 / 1</span>
@@ -193,9 +194,9 @@
   <footer>
     <div class="footer-left">
       <p>No copyrighted content is hosted or streamed by this platform.</p>
-    </div>
-    <div class="footer-center">
-      <p id="stats"></p>      <!-- NEW: Visible User Counter -->
+    </div>    <div class="footer-center">
+      <p id="stats"></p>
+      <!-- NEW: Visible User Counter -->
       <p id="view-counter" class="view-counter">Loading stats...</p>
     </div>
     <div class="footer-right">
