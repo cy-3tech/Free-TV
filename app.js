@@ -1,12 +1,3 @@
-// ============================================
-// SUPABASE CONFIGURATION
-// ============================================
-const SUPABASE_URL = 'https://gothdzitnhoexqzjhgdz.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvdGhkeml0bmhvZXhxempoZGd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyOTUwMjAsImV4cCI6MjA5OTg3MTAyMH0.RnogiDlvNvQJhkxP7BYvJWbJRaWJkN_hyOvylJGmiXc';
-
-// Initialize Supabase Client
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 const state = {
   channelsById: new Map(),
   channelsByCountry: new Map(),
@@ -20,7 +11,6 @@ const state = {
   dataLoaded: false,
   streamsLoaded: false,
   allStreams: null,
-  // Load favorites from LocalStorage initially for speed
   favorites: JSON.parse(localStorage.getItem('myloFavorites')) || []
 };
 
@@ -29,6 +19,31 @@ const $ = id => document.getElementById(id);
 // ============================================
 // A NOTE ON CHANNEL SOURCING
 // ============================================
+// This app sources ALL channel + stream metadata from the community-maintained,
+// continuously-updated iptv-org public dataset (channels.json / streams.json /
+// logos.json). This already covers every country's free-to-air / publicly
+// streamable channels, so there is no need to hand-maintain per-country lists.
+//
+// South Africa's free-to-air channels (SABC 1/2/3, SABC News, SABC Sport,
+// e.tv, eExtra, eMovies, OpenView HD channels such as 1Magic-adjacent FTA
+// carriers, Mindset, Cbeebies-style kids feeds, etc.) come through the same
+// pipeline below and are tagged where possible — see tagOpenViewChannels().
+//
+// DStv is intentionally NOT included. DStv is MultiChoice's subscription
+// satellite service, delivered with proprietary DRM/encryption. There is no
+// legitimate free public stream endpoint for DStv channels, so adding "DStv"
+// entries here would necessarily mean either fake/non-functional URLs or
+// unauthorized/pirated feeds. Neither is something this app will ship.
+//
+// Every channel from the dataset is shown immediately — there is no
+// pre-flight network check before a channel appears. If a stream turns out
+// to be dead when someone actually presses play, playWithAntiBlock() (below)
+// automatically retries the channel's other candidate URLs/fallbacks, so bad
+// links get handled at play time instead of at load time.
+
+// Tag OpenView HD's known free-to-air channel names within South Africa so
+// they're easy to find/filter, without inventing stream data for them — the
+// underlying URLs still come from the same public dataset as everything else.
 const OPENVIEW_NAME_PATTERNS = [
   /openview/i, /1magic/i, /moja\s?love/i, /a24/i, /rezolusie/i, /pop\s?tv/i, /soweto\s?tv/i, /dumelang/i
 ];
@@ -47,9 +62,12 @@ function tagOpenViewChannels() {
 // ============================================
 // STREAM ANTI-BLOCK / ROTATOR SYSTEM
 // ============================================
-function getRotatedStreams(channel) {  if (!channel.streams || channel.streams.length === 0) return [];
+function getRotatedStreams(channel) {
+  if (!channel.streams || channel.streams.length === 0) return [];
+
   return channel.streams.map((stream, idx) => {
     const base = { ...stream, originalUrl: stream.url };
+
     if (idx === 0) {
       base.fallbackUrls = [
         stream.url,
@@ -58,9 +76,11 @@ function getRotatedStreams(channel) {  if (!channel.streams || channel.streams.l
         stream.url.replace(/\/stream\.m3u8$/, '/playlist.m3u8')
       ];
     }
+
     base.cacheBustedUrl = stream.url.includes('?')
       ? `${stream.url}&t=${Date.now()}`
       : `${stream.url}?t=${Date.now()}`;
+
     return base;
   });
 }
@@ -80,6 +100,7 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
   const stream = rotatedStreams[streamIndex];
   const urlsToTry = [stream.cacheBustedUrl, ...(stream.fallbackUrls || [])];
 
+  // Update UI safely
   try {
     const nameEl = $('current-channel-name');
     const metaEl = $('player-meta');
@@ -96,7 +117,8 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
     if (logo) {
       if (channel.logo) { logo.src = channel.logo; logo.classList.remove('hidden'); }
       else { logo.classList.add('hidden'); }
-    }    if (overlay) overlay.classList.remove('hidden');
+    }
+    if (overlay) overlay.classList.remove('hidden');
     if (loader) loader.classList.remove('hidden');
     if (fallback) fallback.classList.add('hidden');
     if (errorEl) errorEl.classList.add('hidden');
@@ -129,6 +151,7 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
     const url = urlsToTry[urlIndex];
     console.log(`Anti-Block: Trying URL ${urlIndex + 1}/${urlsToTry.length}`);
 
+    // Timeout protection - if no manifest parsed in 10s, move on
     loadTimeout = setTimeout(() => {
       console.warn(`⏱️ Load timeout for URL ${urlIndex + 1}, trying next...`);
       urlIndex++;
@@ -145,7 +168,8 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
           playWithAntiBlock(channel, streamIndex + 1, attempt + 1);
         } else {
           showPlayerError(true, 'All streams unavailable or blocked.');
-        }      }
+        }
+      }
     };
 
     try {
@@ -194,55 +218,39 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
 function playChannel(channel, streamIndex = 0) {
   playWithAntiBlock(channel, streamIndex, 0);
 }
+
 // ============================================
-// TRACKING & SUPABASE INTEGRATION
+// TRACKING & AUTO PACKAGE.JSON
 // ============================================
-async function initTracking() {
+function initTracking() {
   try {
-    // Generate or retrieve local fingerprint
-    let currentUserFP = localStorage.getItem('mylo_user_fp');
+    const STORAGE_KEY = 'mylo_tv_package_json';
+    let packageData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+      name: "mylo-tv-webapp", version: "3.5.0",
+      description: "Global Free TV Streaming Platform with Anti-Block",
+      author: "DTGOdev", license: "MIT",
+      stats: { totalViews: 0, uniqueUsers: 0, firstVisit: new Date().toISOString(), lastVisit: new Date().toISOString(),
+        userFingerprint: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) }
+    };
+    const currentUserFP = localStorage.getItem('mylo_user_fp');
     if (!currentUserFP) {
-      currentUserFP = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
-      localStorage.setItem('mylo_user_fp', currentUserFP);
-    }
-
-    // 1. Increment View Count in Supabase using the secure function
-    // This is atomic and handles high traffic safely
-    await supabase.rpc('increment_view_count');
-    
-    // 2. Fetch latest stats to display
-    fetchAndDisplayStats();
-
-  } catch (e) { 
-    console.warn('Tracking init failed, falling back to local:', e); 
-    // Fallback to local if Supabase fails
-    const localStats = JSON.parse(localStorage.getItem('mylo_tv_package_json')) || { stats: { totalViews: 0, uniqueUsers: 0 } };
-    localStats.stats.totalViews++;
-    localStorage.setItem('mylo_tv_package_json', JSON.stringify(localStats));
-    updateVisibleCounter(localStats.stats);
-  }
-}
-
-async function fetchAndDisplayStats() {
-  try {
-    const { data, error } = await supabase.from('global_stats').select('total_views, unique_users').single();
-    if (data) {
-      updateVisibleCounter(data);
-    }
-  } catch (e) {
-    console.error("Failed to fetch stats", e);
-  }
+      localStorage.setItem('mylo_user_fp', packageData.stats.userFingerprint);
+      packageData.stats.uniqueUsers++;
+    } else { packageData.stats.userFingerprint = currentUserFP; }
+    packageData.stats.totalViews++;
+    packageData.stats.lastVisit = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(packageData));
+    updateVisibleCounter(packageData.stats);
+  } catch (e) { console.warn('Tracking init failed:', e); }
 }
 
 function updateVisibleCounter(stats) {
   const counterEl = $('view-counter');
   if (counterEl && stats) {
-    // Handle both DB keys (snake_case) and local keys (camelCase)
-    const views = stats.total_views || stats.totalViews || 0;
-    const users = stats.unique_users || stats.uniqueUsers || 0;
-    counterEl.textContent = `👁️ ${views.toLocaleString()} Views • 👤 ${users.toLocaleString()} Users`;
+    counterEl.textContent = `👁️ ${stats.totalViews.toLocaleString()} Views • 👤 ${stats.uniqueUsers.toLocaleString()} Users`;
   }
 }
+
 // ============================================
 // BACKGROUND PARTICLE CANVAS
 // ============================================
@@ -292,7 +300,8 @@ function processData(channels, countries, geoData) {
   channels.forEach(ch => {
     if (!ch.country || !ch.id) return;
     state.channelsById.set(ch.id, { id: ch.id, name: ch.name, country: ch.country.toUpperCase(), categories: ch.categories, logo: null, streams: [] });
-    const code = ch.country.toUpperCase();    if (!state.channelsByCountry.has(code)) state.channelsByCountry.set(code, []);
+    const code = ch.country.toUpperCase();
+    if (!state.channelsByCountry.has(code)) state.channelsByCountry.set(code, []);
     state.channelsByCountry.get(code).push(ch.id);
   });
   buildGeoFeatures(geoData);
@@ -341,7 +350,8 @@ function rebuildCountryCounts() {
     const isoA2 = f.properties.isoA2;
     const count = state.channelsByCountry.has(isoA2) ? state.channelsByCountry.get(isoA2).length : 0;
     return { ...f, properties: { ...f.properties, channelCount: count } };
-  });  if (state.globe) state.globe.polygonsData(state.geoFeatures);
+  });
+  if (state.globe) state.globe.polygonsData(state.geoFeatures);
 }
 
 async function prefetchLogos() {
@@ -390,7 +400,8 @@ function initGlobe() {
         showCountryChannels(code);
       }
     })
-    .onPolygonHover(hoverD => {      globe.polygonAltitude(d => d === hoverD ? 0.045 : 0.007)
+    .onPolygonHover(hoverD => {
+      globe.polygonAltitude(d => d === hoverD ? 0.045 : 0.007)
         .polygonCapColor(d => d === hoverD ? 'rgba(255,215,0,0.92)' : getColor(d.properties.channelCount));
     })(container);
   globe.controls().autoRotate = true;
@@ -439,7 +450,8 @@ function renderChannelList(channels) {
   if (!channels.length) { ul.innerHTML='<li class="empty">📭 No channels with live streams</li>'; return; }
   channels.sort((a,b)=>a.name.localeCompare(b.name));
   channels.forEach(ch => {
-    const li=document.createElement('li'); li.className='channel-item'; li.dataset.name=ch.name.toLowerCase();    const logoHtml = ch.logo ? `<img src="${ch.logo}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="logo-placeholder">${ch.name.charAt(0).toUpperCase()}</div>`;
+    const li=document.createElement('li'); li.className='channel-item'; li.dataset.name=ch.name.toLowerCase();
+    const logoHtml = ch.logo ? `<img src="${ch.logo}" alt="" loading="lazy" onerror="this.style.display='none'">` : `<div class="logo-placeholder">${ch.name.charAt(0).toUpperCase()}</div>`;
     const cats = ch.categories ? ch.categories.slice(0,2).join(', ') : 'General';
     const sc = ch.streams ? ch.streams.length : 0;
     li.innerHTML=`<div class="channel-logo">${logoHtml}</div><div class="channel-info"><div class="channel-name">${escapeHtml(ch.name)}</div><div class="channel-meta">${escapeHtml(cats)}</div><span class="stream-count-badge">▶ ${sc} stream${sc!==1?'s':''}</span></div><button class="play-btn" aria-label="Play ${escapeHtml(ch.name)}">▶</button>`;
@@ -488,7 +500,8 @@ function performSearch(query) {
     if(c.name.toLowerCase().includes(query)&&state.channelsByCountry.has(code))
       items.push({type:'country',code,name:c.name,flag:c.flag});
   });
-  let count=0;  state.channelsById.forEach(ch=>{
+  let count=0;
+  state.channelsById.forEach(ch=>{
     if(count>12)return;
     if(ch.name.toLowerCase().includes(query)){items.push({type:'channel',channel:ch});count++;}
   });
@@ -537,7 +550,8 @@ function initNewFeatures() {
   if(favToggle&&favSidebar){favToggle.addEventListener('click',()=>{favSidebar.classList.remove('hidden');const s=$('sidebar');if(s)s.classList.add('hidden');renderFavorites();});}
   if(closeFav&&favSidebar){closeFav.addEventListener('click',()=>favSidebar.classList.add('hidden'));}
 
-  const pfav=$('player-fav-btn');  if(pfav){pfav.addEventListener('click',()=>{if(state.currentChannel){toggleFavorite(state.currentChannel.id);updatePlayerFavButton();}});}
+  const pfav=$('player-fav-btn');
+  if(pfav){pfav.addEventListener('click',()=>{if(state.currentChannel){toggleFavorite(state.currentChannel.id);updatePlayerFavButton();}});}
 
   const donateBtn=$('donate-btn'), modal=$('donation-modal'), closeDon=$('close-donation');
   if(donateBtn&&modal){donateBtn.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();modal.classList.remove('hidden');requestAnimationFrame(()=>modal.classList.add('visible'));});}
@@ -573,10 +587,6 @@ function toggleFavorite(channelId){
   if(idx>-1){state.favorites.splice(idx,1);showToast('Removed from favorites');}
   else{state.favorites.push({id:channelId});showToast('Added to favorites ');}
   localStorage.setItem('myloFavorites',JSON.stringify(state.favorites));
-  
-  // Optional: Sync to Supabase here if you want cloud favorites
-  // syncFavoriteToSupabase(channelId, idx === -1);
-
   if(state.currentCountry)showCountryChannels(state.currentCountry,true);
 }
 
@@ -586,7 +596,8 @@ function toggleFavorite(channelId){
 function initGlobalEvents(){
   const cs=$('close-sidebar');if(cs)cs.addEventListener('click',()=>{const s=$('sidebar');if(s)s.classList.add('hidden');});
   const cp=$('close-player');if(cp)cp.addEventListener('click',closePlayer);
-  const ns=$('next-stream');if(ns)ns.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,state.currentStreamIndex+1);});  const rs=$('retry-stream');if(rs)rs.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,0);});
+  const ns=$('next-stream');if(ns)ns.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,state.currentStreamIndex+1);});
+  const rs=$('retry-stream');if(rs)rs.addEventListener('click',()=>{if(state.currentChannel)playChannel(state.currentChannel,0);});
   const rv=$('reset-view');if(rv)rv.addEventListener('click',()=>{if(state.globe)state.globe.pointOfView({lat:20,lng:0,altitude:2.5},1500);});
   const fi=$('filter-channels');if(fi)fi.addEventListener('input',e=>{const q=e.target.value.toLowerCase();document.querySelectorAll('.channel-item').forEach(li=>{li.style.display=li.dataset.name.includes(q)?'':'none';});});
   document.addEventListener('click',e=>{if(!e.target.closest('.search-box')){const sr=$('search-results');if(sr)sr.classList.add('hidden');}});
@@ -606,7 +617,7 @@ function hideLoading(){const o=$('loading-overlay');if(o){o.style.opacity='0';se
 async function init() {
   try {
     initParticles();
-    initTracking(); // Now uses Supabase
+    initTracking();
     setLoadingProgress(5,'Initializing Grid...');
     initGlobe();
     initSearch();
@@ -635,7 +646,8 @@ async function init() {
     setTimeout(hideLoading, 400);
     prefetchLogos();
   } catch (err) {
-    console.error('Critical init error:', err);    const lt=$('loading-text');
+    console.error('Critical init error:', err);
+    const lt=$('loading-text');
     if(lt) lt.textContent='Error Loading — Retrying...';
     setTimeout(init, 5000);
   }
