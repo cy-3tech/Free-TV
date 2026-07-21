@@ -11,39 +11,117 @@ const state = {
   dataLoaded: false,
   streamsLoaded: false,
   allStreams: null,
-  favorites: JSON.parse(localStorage.getItem('myloFavorites')) || []
+  favorites: []
 };
 
 const $ = id => document.getElementById(id);
 
 // ============================================
+// SUPABASE DATABASE LAYER — NO LOCALSTORAGE FALLBACK
+// ============================================
+const SUPABASE_URL = 'https://gothdzitnhoexqzjhgdz.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvdGhkeml0bmhvZXhxempoZGd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyOTUwMjAsImV4cCI6MjA5OTg3MTAyMH0.RnogiDlvNvQJhkxP7BYvJWbJRaWJkN_hyOvylJGmiXc';
+
+let supabaseClient = null;
+try {
+  if (typeof supabase !== 'undefined' && supabase.createClient) {
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✅ Supabase client initialized');
+  } else {
+    console.error('❌ Supabase library not loaded. Make sure the CDN script is in <head> before app.js.');
+  }
+} catch (e) {
+  console.error('❌ Supabase init error:', e.message);
+}
+
+function getUserFingerprint() {
+  let fp = localStorage.getItem('mylo_user_fp');
+  if (!fp) {
+    fp = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
+    localStorage.setItem('mylo_user_fp', fp);
+  }
+  return fp;
+}
+
+async function testSupabaseConnection() {
+  if (!supabaseClient) { console.error('❌ Supabase client is null'); return false; }
+  try {
+    const { count, error } = await supabaseClient.from('favorites').select('*', { count: 'exact', head: true });
+    if (error) { console.error('❌ Supabase ping failed:', error.message, error.details || '', error.code || ''); return false; }
+    console.log('✅ Supabase connection OK. Favorites table reachable.');
+    return true;
+  } catch (e) { console.error('❌ Supabase ping exception:', e.message); return false; }
+}
+
+// FAVORITES — SUPABASE ONLY
+async function dbLoadFavorites() {
+  if (!supabaseClient) { console.warn('⚠️ Supabase not available'); return []; }
+  try {
+    const fp = getUserFingerprint();
+    const { data, error } = await supabaseClient.from('favorites').select('channel_id').eq('user_fingerprint', fp);
+    if (error) { console.error('❌ Supabase favorites load error:', error.message, error.details || '', error.code || ''); return []; }
+    return (data || []).map(row => ({ id: row.channel_id }));
+  } catch (e) { console.error('❌ Favorites load exception:', e.message); return []; }
+}
+
+async function dbAddFavorite(channelId) {
+  if (!supabaseClient) throw new Error('Supabase not initialized');
+  const fp = getUserFingerprint();
+  const { error } = await supabaseClient.from('favorites').insert({ user_fingerprint: fp, channel_id: channelId });
+  if (error) { console.error('❌ Supabase favorite add error:', error.message, error.details || '', error.code || ''); throw error; }
+}
+
+async function dbRemoveFavorite(channelId) {
+  if (!supabaseClient) throw new Error('Supabase not initialized');
+  const fp = getUserFingerprint();
+  const { error } = await supabaseClient.from('favorites').delete().eq('user_fingerprint', fp).eq('channel_id', channelId);
+  if (error) { console.error('❌ Supabase favorite remove error:', error.message, error.details || '', error.code || ''); throw error; }
+}
+
+// STATS — SUPABASE ONLY
+async function dbLoadStats() {
+  if (!supabaseClient) { console.warn('⚠️ Supabase not available'); return null; }
+  try {
+    const fp = getUserFingerprint();
+    const { data, error } = await supabaseClient.from('app_stats').select('*').eq('user_fingerprint', fp).single();
+    if (error) {
+      if (error.code === 'PGRST116') return null; // no row yet — normal for first visit
+      console.error('❌ Supabase stats load error:', error.message, error.details || '', error.code || '');
+      return null;
+    }
+    if (!data) return null;
+    return {
+      name: "mylo-tv-webapp", version: "3.5.0",
+      description: "Global Free TV Streaming Platform with Anti-Block",
+      author: "DTGOdev", license: "MIT",
+      stats: {
+        totalViews: data.visit_count || 0,
+        uniqueUsers: data.visit_count || 0,
+        firstVisit: data.first_visit || new Date().toISOString(),
+        lastVisit: data.last_visit || new Date().toISOString(),
+        userFingerprint: fp
+      }
+    };
+  } catch (e) { console.error('❌ Stats load exception:', e.message); return null; }
+}
+
+async function dbSaveStats(packageData) {
+  if (!supabaseClient) return;
+  try {
+    const fp = getUserFingerprint();
+    const { error } = await supabaseClient.from('app_stats').upsert({
+      user_fingerprint: fp,
+      visit_count: packageData.stats.totalViews,
+      first_visit: packageData.stats.firstVisit,
+      last_visit: packageData.stats.lastVisit
+    }, { onConflict: 'user_fingerprint' });
+    if (error) console.error('❌ Supabase stats save error:', error.message, error.details || '', error.code || '');
+  } catch (e) { console.error('❌ Stats save exception:', e.message); }
+}
+
+// ============================================
 // A NOTE ON CHANNEL SOURCING
 // ============================================
-// This app sources ALL channel + stream metadata from the community-maintained,
-// continuously-updated iptv-org public dataset (channels.json / streams.json /
-// logos.json). This already covers every country's free-to-air / publicly
-// streamable channels, so there is no need to hand-maintain per-country lists.
-//
-// South Africa's free-to-air channels (SABC 1/2/3, SABC News, SABC Sport,
-// e.tv, eExtra, eMovies, OpenView HD channels such as 1Magic-adjacent FTA
-// carriers, Mindset, Cbeebies-style kids feeds, etc.) come through the same
-// pipeline below and are tagged where possible — see tagOpenViewChannels().
-//
-// DStv is intentionally NOT included. DStv is MultiChoice's subscription
-// satellite service, delivered with proprietary DRM/encryption. There is no
-// legitimate free public stream endpoint for DStv channels, so adding "DStv"
-// entries here would necessarily mean either fake/non-functional URLs or
-// unauthorized/pirated feeds. Neither is something this app will ship.
-//
-// Every channel from the dataset is shown immediately — there is no
-// pre-flight network check before a channel appears. If a stream turns out
-// to be dead when someone actually presses play, playWithAntiBlock() (below)
-// automatically retries the channel's other candidate URLs/fallbacks, so bad
-// links get handled at play time instead of at load time.
-
-// Tag OpenView HD's known free-to-air channel names within South Africa so
-// they're easy to find/filter, without inventing stream data for them — the
-// underlying URLs still come from the same public dataset as everything else.
 const OPENVIEW_NAME_PATTERNS = [
   /openview/i, /1magic/i, /moja\s?love/i, /a24/i, /rezolusie/i, /pop\s?tv/i, /soweto\s?tv/i, /dumelang/i
 ];
@@ -64,10 +142,8 @@ function tagOpenViewChannels() {
 // ============================================
 function getRotatedStreams(channel) {
   if (!channel.streams || channel.streams.length === 0) return [];
-
   return channel.streams.map((stream, idx) => {
     const base = { ...stream, originalUrl: stream.url };
-
     if (idx === 0) {
       base.fallbackUrls = [
         stream.url,
@@ -76,11 +152,9 @@ function getRotatedStreams(channel) {
         stream.url.replace(/\/stream\.m3u8$/, '/playlist.m3u8')
       ];
     }
-
     base.cacheBustedUrl = stream.url.includes('?')
       ? `${stream.url}&t=${Date.now()}`
       : `${stream.url}?t=${Date.now()}`;
-
     return base;
   });
 }
@@ -90,17 +164,13 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
     showToast('No live streams available.');
     return;
   }
-
   state.currentChannel = channel;
   state.currentStreamIndex = streamIndex;
-
   const rotatedStreams = getRotatedStreams(channel);
   if (streamIndex >= rotatedStreams.length) streamIndex = 0;
-
   const stream = rotatedStreams[streamIndex];
   const urlsToTry = [stream.cacheBustedUrl, ...(stream.fallbackUrls || [])];
 
-  // Update UI safely
   try {
     const nameEl = $('current-channel-name');
     const metaEl = $('player-meta');
@@ -137,7 +207,6 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
 
   const tryNextUrl = () => {
     if (loadTimeout) clearTimeout(loadTimeout);
-
     if (urlIndex >= urlsToTry.length) {
       if (streamIndex + 1 < rotatedStreams.length && attempt < 3) {
         console.log(`Anti-Block: Switching to next stream (${streamIndex + 1})`);
@@ -147,11 +216,8 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
       }
       return;
     }
-
     const url = urlsToTry[urlIndex];
     console.log(`Anti-Block: Trying URL ${urlIndex + 1}/${urlsToTry.length}`);
-
-    // Timeout protection - if no manifest parsed in 10s, move on
     loadTimeout = setTimeout(() => {
       console.warn(`⏱️ Load timeout for URL ${urlIndex + 1}, trying next...`);
       urlIndex++;
@@ -211,7 +277,6 @@ async function playWithAntiBlock(channel, streamIndex = 0, attempt = 0) {
       onError();
     }
   };
-
   tryNextUrl();
 }
 
@@ -220,26 +285,27 @@ function playChannel(channel, streamIndex = 0) {
 }
 
 // ============================================
-// TRACKING & AUTO PACKAGE.JSON
+// TRACKING — SUPABASE ONLY
 // ============================================
-function initTracking() {
+async function initTracking() {
   try {
-    const STORAGE_KEY = 'mylo_tv_package_json';
-    let packageData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
-      name: "mylo-tv-webapp", version: "3.5.0",
-      description: "Global Free TV Streaming Platform with Anti-Block",
-      author: "DTGOdev", license: "MIT",
-      stats: { totalViews: 0, uniqueUsers: 0, firstVisit: new Date().toISOString(), lastVisit: new Date().toISOString(),
-        userFingerprint: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) }
-    };
-    const currentUserFP = localStorage.getItem('mylo_user_fp');
-    if (!currentUserFP) {
-      localStorage.setItem('mylo_user_fp', packageData.stats.userFingerprint);
+    let packageData = await dbLoadStats();
+    if (!packageData) {
+      packageData = {
+        name: "mylo-tv-webapp", version: "3.5.0",
+        description: "Global Free TV Streaming Platform with Anti-Block",
+        author: "DTGOdev", license: "MIT",
+        stats: { totalViews: 0, uniqueUsers: 0, firstVisit: new Date().toISOString(), lastVisit: new Date().toISOString(), userFingerprint: getUserFingerprint() }
+      };
+    }
+    const fp = getUserFingerprint();
+    if (!packageData.stats.userFingerprint) {
+      packageData.stats.userFingerprint = fp;
       packageData.stats.uniqueUsers++;
-    } else { packageData.stats.userFingerprint = currentUserFP; }
+    }
     packageData.stats.totalViews++;
     packageData.stats.lastVisit = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(packageData));
+    await dbSaveStats(packageData);
     updateVisibleCounter(packageData.stats);
   } catch (e) { console.warn('Tracking init failed:', e); }
 }
@@ -282,13 +348,13 @@ function initParticles() {
 }
 
 // ============================================
-// CACHE HELPER
+// CACHE HELPER (IPTV API only — not the DB)
 // ============================================
 async function fetchWithCache(url, key) {
   const cached = localStorage.getItem(key);
   if (cached) { try { const data = JSON.parse(cached); return { json: () => Promise.resolve(data) }; } catch(e) {} }
   const res = await fetch(url); const data = await res.json();
-  try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) { console.warn('Storage full'); }
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch(e) { /* quota full — ignore */ }
   return { json: () => Promise.resolve(data) };
 }
 
@@ -551,7 +617,9 @@ function initNewFeatures() {
   if(closeFav&&favSidebar){closeFav.addEventListener('click',()=>favSidebar.classList.add('hidden'));}
 
   const pfav=$('player-fav-btn');
-  if(pfav){pfav.addEventListener('click',()=>{if(state.currentChannel){toggleFavorite(state.currentChannel.id);updatePlayerFavButton();}});}
+  if(pfav){pfav.addEventListener('click', async ()=>{
+    if(state.currentChannel){ await toggleFavorite(state.currentChannel.id); updatePlayerFavButton(); }
+  });}
 
   const donateBtn=$('donate-btn'), modal=$('donation-modal'), closeDon=$('close-donation');
   if(donateBtn&&modal){donateBtn.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();modal.classList.remove('hidden');requestAnimationFrame(()=>modal.classList.add('visible'));});}
@@ -577,17 +645,34 @@ function renderFavorites(){
     const li=document.createElement('li');li.className='favorite-item';
     const lh=ch.logo?`<img src="${ch.logo}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<div class="logo-placeholder">${ch.name.charAt(0).toUpperCase()}</div>`;
     li.innerHTML=`<div class="fav-logo">${lh}</div><div class="fav-info"><div class="fav-name">${escapeHtml(ch.name)}</div><div class="fav-meta">${ch.country}</div></div><button class="remove-fav-btn" title="Remove">🗑️</button>`;
-    li.querySelector('.remove-fav-btn').addEventListener('click',(e)=>{e.stopPropagation();toggleFavorite(ch.id);renderFavorites();});
+    li.querySelector('.remove-fav-btn').addEventListener('click', async (e)=>{e.stopPropagation(); await toggleFavorite(ch.id); renderFavorites(); });
     li.addEventListener('click',()=>playChannel(ch));list.appendChild(li);
   });
 }
 
-function toggleFavorite(channelId){
+async function toggleFavorite(channelId){
   const idx=state.favorites.findIndex(f=>f.id===channelId);
-  if(idx>-1){state.favorites.splice(idx,1);showToast('Removed from favorites');}
-  else{state.favorites.push({id:channelId});showToast('Added to favorites ');}
-  localStorage.setItem('myloFavorites',JSON.stringify(state.favorites));
-  if(state.currentCountry)showCountryChannels(state.currentCountry,true);
+  if(idx>-1){
+    try {
+      await dbRemoveFavorite(channelId);
+      state.favorites.splice(idx,1);
+      showToast('Removed from favorites');
+    } catch(e) {
+      showToast('Failed to remove favorite ❌');
+      return;
+    }
+  } else {
+    try {
+      await dbAddFavorite(channelId);
+      state.favorites.push({id:channelId});
+      showToast('Added to favorites ');
+    } catch(e) {
+      showToast('Failed to add favorite ❌');
+      return;
+    }
+  }
+  if(state.currentCountry) showCountryChannels(state.currentCountry,true);
+  renderFavorites();
 }
 
 // ============================================
@@ -612,12 +697,16 @@ function setLoadingProgress(pct,msg){const bar=$('loading-bar');if(bar)bar.style
 function hideLoading(){const o=$('loading-overlay');if(o){o.style.opacity='0';setTimeout(()=>o.classList.add('hidden'),500);}}
 
 // ============================================
-// MAIN INIT — WITH GLOBAL SAFETY NET
+// MAIN INIT
 // ============================================
 async function init() {
   try {
+    // Load from Supabase only
+    state.favorites = await dbLoadFavorites();
+    await testSupabaseConnection();
+
     initParticles();
-    initTracking();
+    await initTracking();
     setLoadingProgress(5,'Initializing Grid...');
     initGlobe();
     initSearch();
