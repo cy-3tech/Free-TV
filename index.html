@@ -1,140 +1,207 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mylo-TV</title>
-    <!-- Supabase JS Client -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <!-- Three.js & Globe.gl dependencies (Assumed present based on your existing logic) -->
-    <script src="//unpkg.com/three"></script>
-    <script src="//unpkg.com/globe.gl"></script>
-    <!-- HLS.js for streaming -->
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <style>
-        /* Minimal styles to ensure visibility if external CSS is missing */
-        body { margin: 0; background: #0c0e1e; color: #fff; font-family: 'Inter', sans-serif; overflow: hidden; }
-        .hidden { display: none !important; }
-        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; }
-        #globe-container { width: 100vw; height: 100vh; }
-        /* Add any other specific styles from your original project here if needed */
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mylo-TV</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
 
-    <canvas id="bg-canvas"></canvas>
-    
-    <!-- Loading Overlay -->
-    <div id="loading-overlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:#0c0e1e;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-        <h1>📡 Mylo-TV</h1>
-        <p id="loading-text">Initializing Global Stream Grid...</p>
-        <p>Fetching channels, streams & satellite data</p>
-        <div style="width:200px;height:4px;background:#333;margin-top:20px;border-radius:2px;">
-            <div id="loading-bar" style="width:0%;height:100%;background:#00f0ff;border-radius:2px;transition:width 0.3s;"></div>
-        </div>
+  <!-- Animated Background Particles -->
+  <canvas id="bg-canvas"></canvas>
+
+  <!-- Loading Overlay -->
+  <div id="loading-overlay">
+    <div class="loading-logo">
+      <div class="logo-glow-ring"></div>
+      <div class="logo-satellite">📡</div>
+    </div>
+    <div class="loading-brand">
+      <span class="loading-m">M</span><span class="loading-y">y</span><span class="loading-l">l</span><span class="loading-o">o</span><span class="loading-dash">-</span><span class="loading-tv">TV</span>
+    </div>
+    <div class="loading-bar-wrap">
+      <div class="loading-bar-track">
+        <div class="loading-bar-fill" id="loading-bar"></div>
+      </div>
+      <p id="loading-text">Initializing Global Stream Grid...</p>
+      <p id="loading-sub">Fetching channels, streams & satellite data</p>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <div class="logo-orb">
+        <div class="orb-ring r1"></div>
+        <div class="orb-ring r2"></div>
+        <div class="orb-ring r3"></div>
+        <span class="orb-icon">📡</span>
+      </div>
+      <div class="brand-text">
+        <h1 class="brand-name">Mylo<span class="brand-dash">-</span><span class="brand-tv">TV</span></h1>
+        <span class="byline">by DTGOdev</span>
+      </div>
+    </div>
+    <div class="search-box">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"></circle>
+        <path d="m21 21-4.35-4.35"></path>
+      </svg>
+      <input type="text" id="search" placeholder="Search countries or channels..." autocomplete="off" />
+      <button id="voice-search-btn" class="voice-search-btn" title="Voice Search">🎤</button>
+      <div id="search-results" class="dropdown hidden"></div>
     </div>
 
-    <!-- Header / Stats -->
-    <div style="position:absolute;top:20px;left:20px;z-index:10;">
-        <h1 style="margin:0;font-size:24px;">📡 Mylo-TV</h1>
-        <div id="stats" style="font-size:12px;color:#6a7a9b;margin-top:5px;">Loading stats...</div>
-        <div id="view-counter" style="font-size:11px;color:#4a5a7b;margin-top:2px;"></div>
+    <div class="header-actions">
+      <div class="header-stats" id="header-stats"></div>
+      <button id="favorites-toggle-btn" class="action-btn" title="My Favorites">⭐</button>
+      <button id="donate-btn" class="action-btn donate-btn" title="Support Mylo-TV">💎</button>
     </div>
+  </header>
 
-    <!-- Search Box -->
-    <div class="search-box" style="position:absolute;top:20px;right:20px;z-index:10;display:flex;gap:10px;">
-        <input type="text" id="search" placeholder="Search channels or countries..." style="padding:8px 12px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.5);color:#fff;outline:none;">
-        <button id="voice-search-btn" style="background:none;border:none;color:#fff;cursor:pointer;font-size:18px;">🎤</button>
-        <button id="favorites-toggle-btn" style="background:none;border:none;color:#fff;cursor:pointer;font-size:18px;">⭐</button>
-        <button id="donate-btn" style="background:none;border:none;color:#ffd700;cursor:pointer;font-size:18px;">💎</button>
-    </div>
-    <div id="search-results" class="hidden" style="position:absolute;top:70px;right:20px;width:300px;max-height:400px;overflow-y:auto;background:rgba(8,10,24,0.95);border:1px solid rgba(0,240,255,0.3);border-radius:10px;z-index:10;padding:10px;"></div>
-
-    <!-- Globe Container -->
+  <!-- Main -->
+  <main>
     <div id="globe-container"></div>
+    <div id="click-pulse" class="click-pulse hidden"></div>
+
+    <!-- Legend -->
+    <div id="legend">
+      <div class="legend-title">📶 Channel Density</div>
+      <div class="legend-gradient"></div>
+      <div class="legend-labels">
+        <span>None</span>
+        <span>500+</span>
+      </div>
+    </div>
+
+    <button id="reset-view" title="Reset Globe View">⟲</button>
 
     <!-- Sidebar -->
-    <div id="sidebar" class="hidden" style="position:absolute;top:0;left:0;width:350px;height:100%;background:rgba(8,10,24,0.95);border-right:1px solid rgba(0,240,255,0.3);z-index:20;padding:20px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.3s;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <h2 id="sidebar-title" style="margin:0;">Select a Country</h2>
-            <button id="close-sidebar" style="background:none;border:none;color:#fff;cursor:pointer;font-size:20px;">✕</button>
+    <aside id="sidebar" class="hidden">
+      <div class="sidebar-header">
+        <div>
+          <h2 id="sidebar-title">Select a Country</h2>
+          <div id="channel-count" class="meta"></div>
         </div>
-        <div id="channel-count" style="font-size:12px;color:#6a7a9b;margin-bottom:10px;"></div>
-        <input type="text" id="filter-channels" placeholder="Filter channels..." style="width:100%;padding:8px;margin-bottom:15px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);background:rgba(0,0,0,0.3);color:#fff;">
-        <ul id="channels" style="list-style:none;padding:0;margin:0;"></ul>
-    </div>
-
+        <button id="close-sidebar" aria-label="Close">✕</button>
+      </div>
+      <div class="sidebar-filters">
+        <input type="text" id="filter-channels" placeholder="Filter channels..." />
+      </div>
+      <ul id="channels"></ul>
+    </aside>
     <!-- Favorites Sidebar -->
-    <div id="favorites-sidebar" class="hidden" style="position:absolute;top:0;left:0;width:350px;height:100%;background:rgba(8,10,24,0.95);border-right:1px solid rgba(255,215,0,0.3);z-index:20;padding:20px;overflow-y:auto;transform:translateX(-100%);transition:transform 0.3s;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <h2 style="margin:0;">⭐ My Favorites</h2>
-            <button id="close-favorites" style="background:none;border:none;color:#fff;cursor:pointer;font-size:20px;">✕</button>
+    <aside id="favorites-sidebar" class="hidden">
+      <div class="sidebar-header">
+        <div>
+          <h2>⭐ My Favorites</h2>
+          <div class="meta">Saved Channels</div>
         </div>
-        <ul id="favorites-list" style="list-style:none;padding:0;margin:0;"></ul>
-    </div>
+        <button id="close-favorites" aria-label="Close">✕</button>
+      </div>
+      <ul id="favorites-list"></ul>
+    </aside>
 
     <!-- Player Overlay -->
-    <div id="player-overlay" class="hidden" style="position:absolute;bottom:20px;left:20px;right:20px;height:300px;background:rgba(0,0,0,0.9);border:1px solid rgba(0,240,255,0.3);border-radius:10px;z-index:30;display:flex;flex-direction:column;">
-        <div style="display:flex;justify-content:space-between;padding:10px;border-bottom:1px solid rgba(255,255,255,0.1);">
+    <div id="player-overlay" class="hidden">
+      <div class="player-backdrop"></div>
+      <div class="player-card">
+        <div class="player-header">
+          <div class="channel-info">
+            <img id="player-logo" src="" alt="" class="hidden" />
             <div>
-                <h3 id="current-channel-name" style="margin:0;font-size:16px;">Channel Name</h3>
-                <span id="player-meta" style="font-size:11px;color:#6a7a9b;">Live</span>
+              <h3 id="current-channel-name">Channel</h3>
+              <span id="player-meta" class="meta"></span>
             </div>
-            <div style="display:flex;gap:10px;align-items:center;">
-                <button id="player-fav-btn" style="background:none;border:none;color:#fff;cursor:pointer;font-size:18px;">☆</button>
-                <button id="close-player" style="background:none;border:none;color:#fff;cursor:pointer;font-size:20px;">✕</button>
+          </div>
+          <div class="player-header-right">
+            <span id="live-badge"><span class="live-dot"></span>LIVE</span>
+            <!-- Favorite Button in Player -->
+            <button id="player-fav-btn" class="action-btn" title="Add to Favorites">☆</button>
+            <button id="close-player" aria-label="Close Player">✕</button>
+          </div>
+        </div>
+        <div class="player-body">
+          <div id="player-loader" class="player-loader hidden">
+            <div class="signal-bars">
+              <span></span><span></span><span></span><span></span><span></span>
             </div>
+            <p>Acquiring signal...</p>
+          </div>
+          <div id="stream-fallback" class="stream-fallback hidden">
+            <p>🔌 Primary stream failed. Attempting fallback...</p>
+          </div>
+          <div id="player-error" class="player-error hidden">
+            <p>⚠️ All streams unavailable for this channel.</p>
+            <button id="retry-stream">↺ Retry</button>
+          </div>
+          <video
+            id="video-player"
+            controls
+            playsinline
+            preload="auto"            disablepictureinpicture
+          ></video>
+          <div class="stream-controls">
+            <span id="stream-indicator">Stream 1 / 1</span>
+            <button id="next-stream" class="hidden">Next Stream ⏵</button>
+          </div>
         </div>
-        <div style="flex:1;position:relative;background:#000;">
-            <video id="video-player" style="width:100%;height:100%;object-fit:contain;" controls></video>
-            <img id="player-logo" class="hidden" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);max-width:100px;opacity:0.5;" src="">
-            <div id="player-loader" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#00f0ff;">📡 Acquiring signal...</div>
-            <div id="stream-fallback" class="hidden" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff006e;">🔌 Primary stream failed. Attempting fallback...</div>
-            <div id="player-error" class="hidden" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#ff006e;text-align:center;">
-                <p>⚠️ All streams unavailable for this channel.</p>
-                <button id="retry-stream" style="margin-top:10px;padding:5px 10px;background:rgba(255,0,110,0.2);border:1px solid #ff006e;color:#ff006e;cursor:pointer;border-radius:5px;">↺ Retry</button>
-            </div>
-        </div>
-        <div style="padding:10px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid rgba(255,255,255,0.1);">
-            <span id="stream-indicator" style="font-size:11px;color:#6a7a9b;">Stream 1 / 1</span>
-            <button id="next-stream" style="background:none;border:1px solid rgba(255,255,255,0.2);color:#fff;padding:5px 10px;border-radius:5px;cursor:pointer;">Next Stream ⏵</button>
-        </div>
+      </div>
     </div>
+  </main>
 
-    <!-- Donation Modal -->
-    <div id="donation-modal" class="hidden" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:100;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s;">
-        <div style="background:rgba(8,10,24,0.98);border:1px solid rgba(255,215,0,0.3);border-radius:15px;padding:30px;max-width:400px;width:90%;position:relative;">
-            <button id="close-donation" style="position:absolute;top:15px;right:15px;background:none;border:none;color:#fff;cursor:pointer;font-size:20px;">✕</button>
-            <h2 style="margin-top:0;color:#ffd700;">Support Mylo-TV 💎</h2>
-            <p style="font-size:13px;color:#aaa;">Help us keep the global stream grid free and open!</p>
-            
-            <div style="margin-bottom:20px;">
-                <label style="display:block;font-size:12px;color:#6a7a9b;margin-bottom:5px;">Solana (SOL)</label>
-                <div style="display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:10px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);">
-                    <code id="sol-address" style="flex:1;font-size:11px;word-break:break-all;">2ZkJA8NwDeJLD8qGwaSWhJxUUEuRwT9VkhirdV9cPSGy</code>
-                    <button onclick="copyAddress('sol-address')" style="background:none;border:none;color:#00f0ff;cursor:pointer;margin-left:10px;">📋</button>
-                </div>
-            </div>
-
-            <div style="margin-bottom:20px;">
-                <label style="display:block;font-size:12px;color:#6a7a9b;margin-bottom:5px;">Bitcoin (BTC)</label>
-                <div style="display:flex;align-items:center;background:rgba(0,0,0,0.3);padding:10px;border-radius:5px;border:1px solid rgba(255,255,255,0.1);">
-                    <code id="btc-address" style="flex:1;font-size:11px;word-break:break-all;">bc1qv4yq6tv99vggenfn35gahfje4rnyumav0mkzvq</code>
-                    <button onclick="copyAddress('btc-address')" style="background:none;border:none;color:#00f0ff;cursor:pointer;margin-left:10px;">📋</button>
-                </div>
-            </div>
-
-            <p style="font-size:10px;color:#4a5a7b;text-align:center;">No copyrighted content is hosted or streamed by this platform.</p>
+  <!-- Donation Modal -->
+  <div id="donation-modal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Support Mylo-TV 💎</h3>
+        <button id="close-donation" class="close-modal-btn">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="donation-text">Help us keep the global stream grid free and open!</p>
+        
+        <div class="crypto-box">
+          <label>Solana (SOL)</label>
+          <div class="address-row">
+            <code id="sol-address">2ZkJA8NwDeJLD8qGwaSWhJxUUEuRwT9VkhirdV9cPSGy</code>
+            <button class="copy-btn" onclick="copyAddress('sol-address')">📋</button>
+          </div>
         </div>
+
+        <div class="crypto-box">
+          <label>Bitcoin (BTC)</label>
+          <div class="address-row">
+            <code id="btc-address">bc1qv4yq6tv99vggenfn35gahfje4rnyumav0mkzvq</code>
+            <button class="copy-btn" onclick="copyAddress('btc-address')">📋</button>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Toast Notification -->
-    <div id="toast" class="hidden" style="position:fixed;bottom:30px;left:50%;transform:translateX(-50%);background:rgba(0,240,255,0.9);color:#000;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:bold;z-index:200;opacity:0;transition:opacity 0.3s;"></div>
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden"></div>
 
-    <footer style="position:absolute;bottom:10px;right:20px;font-size:10px;color:#4a5a7b;z-index:5;">
-        developed by DTGOdev
-    </footer>
+  <!-- Footer -->
+  <footer>
+    <div class="footer-left">
+      <p>No copyrighted content is hosted or streamed by this platform.</p>
+    </div>
+    <div class="footer-center">
+      <p id="stats"></p>      <!-- NEW: Visible User Counter -->
+      <p id="view-counter" class="view-counter">Loading stats...</p>
+    </div>
+    <div class="footer-right">
+      <p class="footer-credit">developed by <span class="footer-dev">DTGOdev</span></p>
+    </div>
+  </footer>
 
-    <script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
