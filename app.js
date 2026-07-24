@@ -4,64 +4,15 @@
 const SUPABASE_URL = 'https://gothdzitnhoexqzjhgdz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdvdGhkeml0bmhvZXhxempoZGd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyOTUwMjAsImV4cCI6MjA5OTg3MTAyMH0.RnogiDlvNvQJhkxP7BYvJWbJRaWJkN_hyOvylJGmiXc';
 
+// Initialize Supabase Client
 let supabase = null;
-let myloUserId = localStorage.getItem('mylo_user_id');
-
-// Generate User ID if missing
-if (!myloUserId) {
-    myloUserId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36);
-    localStorage.setItem('mylo_user_id', myloUserId);
+if (typeof window.supabase !== 'undefined') {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
-// Initialize Supabase safely
-function initSupabaseClient() {
-    try {
-        if (typeof window.supabase !== 'undefined') {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            console.log('✅ Supabase client initialized');
-        } else {
-            console.warn('⚠️ Supabase library not found. Favorites will use localStorage.');
-        }
-    } catch (e) {
-        console.error('❌ Supabase init failed:', e);
-    }
-}
+// Get User ID from HTML inline script
+const myloUserId = localStorage.getItem('mylo_user_id');
 
-// Database Helpers
-async function loadFavoritesFromDB() {
-    if (!supabase) return JSON.parse(localStorage.getItem('myloFavorites')) || [];
-    try {
-        const { data, error } = await supabase
-            .from('favorites')
-            .select('channel_id')
-            .eq('user_id', myloUserId);
-        
-        if (error) throw error;
-        console.log(`📥 Loaded ${data.length} favorites from Supabase`);
-        return data.map(item => ({ id: item.channel_id }));
-    } catch (e) {
-        console.warn('⚠️ DB load failed, falling back to localStorage', e);
-        return JSON.parse(localStorage.getItem('myloFavorites')) || [];
-    }
-}
-
-async function saveFavoriteToDB(channelId) {
-    if (!supabase) return;
-    try {
-        await supabase.from('favorites').insert({ user_id: myloUserId, channel_id: channelId });
-    } catch (e) { console.error('Save fav error:', e); }
-}
-
-async function removeFavoriteFromDB(channelId) {
-    if (!supabase) return;
-    try {
-        await supabase.from('favorites').delete().eq('user_id', myloUserId).eq('channel_id', channelId);
-    } catch (e) { console.error('Remove fav error:', e); }
-}
-
-// ============================================
-// APP STATE
-// ============================================
 const state = {
     channelsById: new Map(),
     channelsByCountry: new Map(),
@@ -75,10 +26,59 @@ const state = {
     dataLoaded: false,
     streamsLoaded: false,
     allStreams: null,
-    favorites: [] // Will be populated during init
+    favorites: [] // Will be loaded from Supabase
 };
 
 const $ = id => document.getElementById(id);
+
+// ============================================
+// SUPABASE FAVORITES LOGIC
+// ============================================
+async function loadFavoritesFromSupabase() {
+    if (!supabase || !myloUserId) return [];
+    try {
+        const { data, error } = await supabase
+            .from('favorites')
+            .select('channel_id')
+            .eq('user_id', myloUserId);
+        
+        if (error) throw error;
+        return data.map(item => ({ id: item.channel_id }));
+    } catch (e) {
+        console.error('Error loading favorites:', e);
+        return [];
+    }
+}
+
+async function saveFavoriteToSupabase(channelId) {
+    if (!supabase || !myloUserId) return;
+    try {
+        const { error } = await supabase
+            .from('favorites')
+            .insert({ user_id: myloUserId, channel_id: channelId });
+        
+        if (error && error.code !== '23505') { // Ignore duplicate key errors
+            console.error('Error saving favorite:', error);
+        }
+    } catch (e) {
+        console.error('Error saving favorite:', e);
+    }
+}
+
+async function removeFavoriteFromSupabase(channelId) {
+    if (!supabase || !myloUserId) return;
+    try {
+        const { error } = await supabase
+            .from('favorites')
+            .delete()
+            .eq('user_id', myloUserId)
+            .eq('channel_id', channelId);
+        
+        if (error) console.error('Error removing favorite:', error);
+    } catch (e) {
+        console.error('Error removing favorite:', e);
+    }
+}
 
 // ============================================
 // A NOTE ON CHANNEL SOURCING
@@ -672,12 +672,12 @@ async function toggleFavorite(channelId){
     const idx=state.favorites.findIndex(f=>f.id===channelId);
     if(idx>-1){
         state.favorites.splice(idx,1);
-        await removeFavoriteFromDB(channelId);
+        await removeFavoriteFromSupabase(channelId);
         showToast('Removed from favorites');
     }
     else{
         state.favorites.push({id:channelId});
-        await saveFavoriteToDB(channelId);
+        await saveFavoriteToSupabase(channelId);
         showToast('Added to favorites ⭐');
     }
     
@@ -720,9 +720,6 @@ function hideLoading(){const o=$('loading-overlay');if(o){o.style.opacity='0';se
 // ============================================
 async function init() {
     try {
-        // 1. Initialize Supabase Client (Non-blocking)
-        initSupabaseClient();
-
         initParticles();
         initTracking();
         setLoadingProgress(5,'Initializing Grid...');
@@ -731,9 +728,9 @@ async function init() {
         initNewFeatures();
         initGlobalEvents();
         
-        // 2. Load Favorites from DB (Async but awaited to ensure UI consistency)
+        // Load favorites from Supabase before showing UI
         setLoadingProgress(10,'Syncing Favorites...');
-        state.favorites = await loadFavoritesFromDB();
+        state.favorites = await loadFavoritesFromSupabase();
         
         setLoadingProgress(15,'Loading channels...');
         const [chRes,coRes,geoRes] = await Promise.all([
