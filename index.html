@@ -16,6 +16,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<!-- App Logic (Loads first) -->
+  <script src="app.js"></script>
+
   
   <!-- Supabase JS Client (MUST load before app.js) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -210,7 +214,7 @@
     <div class="footer-right"></div>
   </footer>
 
-  <!-- App Logic (Loads LAST) -->
+  <!-- App Logic (Loads first) -->
   <script src="app.js"></script>
 
 </body>
